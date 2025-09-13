@@ -1,0 +1,9 @@
+# __pycache__
+venv/
+oldfiles
+studyanalytics.db
+config.json
+.vscode
+dist/
+.venv/
+build/

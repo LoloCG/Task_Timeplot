@@ -28,12 +28,12 @@ class StartSequence:
         return True
 
     @staticmethod
-    def generate_from_start():
+    def generate_from_start(ccourse=CURRENT_COURSE, cperiod=CURRENT_PERIOD, period_start=CURRENT_PERIOD_START):
         log.debug(f"Sync file path set in:\n\t{str(SP_FILE)}")
 
         log.info(f'Importing all data for SP Course '
-            f'{CURRENT_COURSE} - {CURRENT_PERIOD} '
-            f'starting on {CURRENT_PERIOD_START}')
+            f'{ccourse} - {cperiod} '
+            f'starting on {period_start}')
 
         importer = SPImportManager(
             sp_path=SP_FILE, 
@@ -42,8 +42,8 @@ class StartSequence:
         flat_tasks = importer.clean_sp_tasks(
             tasks=tasks,
             projects=projects, 
-            ccourse=CURRENT_COURSE, 
-            cperiod=CURRENT_PERIOD
+            ccourse=ccourse, 
+            cperiod=cperiod
         )
         df = importer.convert_tasks_to_df(flat_tasks, cstart=None)
         Orchestrators.upsert_df_to_db(df)
@@ -51,7 +51,7 @@ class StartSequence:
         sync_headers = importer.get_last_update_nums()
 
         config_mng = JsonConfigManager()
-        config_mng.save_dict_to_config(data={
+        data={
             "sync_data":{
                 "sync_file_path":str(SP_FILE),
                 "last_update":sync_headers["lastUpdate"],
@@ -60,26 +60,32 @@ class StartSequence:
                 "update_date":str(datetime.now(timezone.utc)),
             },
             "current_period_data":{
-                "current_course":CURRENT_COURSE,
-                "current_period":CURRENT_PERIOD,
-                "period_start_date":CURRENT_PERIOD_START
+                "current_course":ccourse,
+                "current_period":cperiod,
+                "period_start_date":period_start
             }
-        })
+        }
+        config_mng.save_dict_to_config(data)
+        log.debug(f"saving config:\n{data}")
 
-        # TODO: this should be changed with user input in the future...
         DBManager().insert_period_data(
-            course=CURRENT_COURSE,
-            period=CURRENT_PERIOD,
-            start_date=datetime.strptime(CURRENT_PERIOD_START, '%d-%m-%Y').date(),
+            course=ccourse,
+            period=cperiod,
+            start_date=datetime.strptime(period_start, '%d-%m-%Y').date(),
             finished=False
         )
 
 class Orchestrators:        
 
     @staticmethod
-    def plot_daily_hours_bars(*_, course:str = CURRENT_COURSE, period:str = CURRENT_PERIOD):
-        df = DBManager().get_daily_data(course, period)
+    def plot_daily_hours_bars(*_, course:str=None, period:str=None):
+        if course or period is None:
+            config = JsonConfigManager().load_json_config()["current_period_data"]
+            course=config["current_course"]
+            period=config["current_period"]
+
         log.debug(f"Plotting daily data for {course}, {period}")
+        df = DBManager().get_daily_data(course, period)
         Charts.plot_daily_stack_bar(df)
 
     @staticmethod

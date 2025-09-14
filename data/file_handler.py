@@ -44,9 +44,10 @@ def stream_json_file(file_path: Path, chunk_size:int=64, limit=None):
                 break                 
 
 class SPImportManager:
-    def __init__(self, sp_path: Path):
+    def __init__(self, path_str: str):
+        sp_path = Path(path_str)
         if not sp_path.exists():
-            log.error(f'Error, sync path does not exist ({str(sp_path)})')
+            log.error(f'Error, sync path does not exist ({path_str})')
         self.sp_path     = sp_path
     
     def get_last_update_nums(self) -> dict:

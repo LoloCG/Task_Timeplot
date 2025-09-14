@@ -519,27 +519,3 @@ class JsonConfigManager:
             json.dump(config, file, indent=4)
 
         return config
-
-class SyncStatus(Enum):
-    FIRST_RUN           = 0
-    UP_TO_DATE          = 1
-    UPDATE_AVAILABLE    = 2
-
-def check_local_archives_ver(headers:dict) -> SyncStatus:
-    '''
-    Return int value indicating:
-    '''
-    last_young  = headers["archiveYoung"]
-    last_old    = headers["archiveOld"]
-
-    config      = JsonConfigManager().load_json_config()
-    local_young = int(config.get("local_archive_young", 0))
-    local_old   = int(config.get("local_archive_old", 0))
-
-    if local_young == last_young and local_old == last_old:
-        log.debug(f"Archived tasks seem in sync.\nyoung={local_young}={last_young} {local_young==last_young}, old={local_old}{last_old}{local_old==last_old}")
-        return SyncStatus.UP_TO_DATE
-    elif local_young < local_young:
-        return SyncStatus.ARCHIVE_YOUNG
-    else:
-        return SyncStatus.ARCHIVE_OLD

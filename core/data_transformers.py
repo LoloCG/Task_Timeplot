@@ -3,12 +3,6 @@ import pandas as pd
 from utils.logger import LoggerSingleton
 log = LoggerSingleton().get_logger()
 
-
-class SPImportTransformer:
-    '''
-    Manages the transformation of Super Productivity data into the format required.
-    '''
-
 class DFTransformers:
     @staticmethod
     def basic_to_daily_clean(df_basic, periods_start: dict[str,str] | None = None):

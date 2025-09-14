@@ -6,9 +6,6 @@ from core.charts import Charts
 from utils.logger import LoggerSingleton
 log = LoggerSingleton().get_logger()
 
-CURRENT_COURSE = '25-26'
-CURRENT_PERIOD = 'Summer'
-CURRENT_PERIOD_START = '20-06-2025'
 SP_FILE = Path(r"C:\Users\Lolo\Nextcloud\Super Productivity\__meta_")
 
 class StartSequence:
@@ -28,11 +25,7 @@ class StartSequence:
         return True
 
     @staticmethod
-    def generate_from_start(
-        ccourse=CURRENT_COURSE, 
-        cperiod=CURRENT_PERIOD, 
-        period_start=CURRENT_PERIOD_START
-        ):
+    def generate_from_start(ccourse:str, cperiod:str, period_start):
         log.debug(f"Sync file path set in:\n\t{str(SP_FILE)}")
 
         log.info(f'Importing all data for SP Course '
@@ -155,10 +148,11 @@ class Orchestrators:
         tasks, projects = importer.get_sp_data(filter_date=last_sync_date)
         log.info(f"Found {len(tasks)} tasks to update.")
 
+        ccourse_config=config["current_period_data"]
         flat_tasks = importer.clean_sp_tasks(
             tasks=tasks, projects=projects, 
-            ccourse=CURRENT_COURSE, 
-            cperiod=CURRENT_PERIOD,
+            ccourse=ccourse_config["current_course"], 
+            cperiod=ccourse_config["current_period"], 
             filter_date=last_sync_date
         )
         df = importer.convert_tasks_to_df(flat_tasks, cstart=None)

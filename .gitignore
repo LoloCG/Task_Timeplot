@@ -2,7 +2,6 @@ __pycache__
 venv/
 .venv/
 
-oldfiles
 studyanalytics.db
 config.json
 .vscode

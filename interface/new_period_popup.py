@@ -28,7 +28,7 @@ AddPeriodPopupKv = '''
                 text_size: self.size
             TextInput:
                 text: root.start_date
-                hint_text: "e.g., 2025-09-13"
+                hint_text: "e.g., 20-06-2025"
                 multiline: False
                 write_tab: False
                 on_text: root.start_date = self.text
@@ -87,7 +87,11 @@ class AddPeriodPopup(Popup):
     # simple error message slot
     error_text  = StringProperty("")
 
-    def __init__(self, on_submit=None, start_date="", course_name="", period_name="", **kwargs):
+    def __init__(
+            self, fresh_start=False, 
+            on_submit=None, start_date="", 
+            course_name="", period_name="", 
+            **kwargs):
         super().__init__(**kwargs)
         self.on_submit = on_submit
         self.start_date = start_date

@@ -55,7 +55,8 @@ class MainMenuLayout(BoxLayout):
         self.add_widget(self.display_options())
 
     def on_kv_post(self, base_widget):
-        self.ids.stats_panel.refresh()
+        if StartSequence.check_local_data_exists():
+            self.ids.stats_panel.refresh()
 
     def sync_and_refresh(self):
         Orchestrators.check_sp_sync()
@@ -77,9 +78,8 @@ class MainMenuLayout(BoxLayout):
         return scroll
 
     def open_add_period(self):
-        def on_submit(data: dict):
-            log.info(data)
 
+        def on_submit(data: dict): log.info(data)
         AddPeriodPopup(on_submit=on_submit).open()    
 
 KV_main_layout='''
@@ -152,10 +152,21 @@ class MainWindows(App):
         super(MainWindows, self).__init__()
 
     def build(self):
-        exists = StartSequence.check_local_data_exists()
-        
-        if not exists:
-            log.info("Generating from start")
-            StartSequence.generate_from_start()
-
         return MainMenuLayout()
+
+    def on_start(self):
+        if not StartSequence.check_local_data_exists():
+            def on_submit(data: dict):
+                StartSequence.generate_from_start(
+                    ccourse=data["course_name"],
+                    cperiod=data["period_name"],
+                    period_start=data["start_date"],
+                )
+                # refresh after bootstrap
+                if self.root and "stats_panel" in self.root.ids:
+                    self.root.ids.stats_panel.refresh()
+                    return MainMenuLayout
+
+            AddPeriodPopup(on_submit=on_submit).open()
+
+        

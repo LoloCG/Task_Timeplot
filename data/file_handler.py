@@ -70,12 +70,15 @@ class SPImportManager:
                 archiveYoung is not None and
                 archiveOld is not None):
                 break
-        
-        return {
+
+
+        data = {
             "lastUpdate":   lastUpdate,
-            "archiveYoung": int(archiveYoung),
-            "archiveOld":   int(archiveOld)
+            "archiveYoung": archiveYoung if archiveYoung is not isinstance(archiveYoung, str) else 0,
+            "archiveOld":   archiveOld if archiveOld is not isinstance(archiveOld, str) else 0,
         }
+
+        return data
 
     def get_sp_data(self, filter_date: date = None):
         '''

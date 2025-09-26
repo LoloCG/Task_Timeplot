@@ -47,7 +47,6 @@ class StartSequence:
 
         sync_headers = importer.get_last_update_nums()
 
-        config_mng = JsonConfigManager()
         data={
             "sync_data":{
                 "sync_file_path":str(SP_FILE),
@@ -62,7 +61,7 @@ class StartSequence:
                 "period_start_date":period_start
             }
         }
-        config_mng.save_dict_to_config(data)
+        JsonConfigManager().save_dict_to_config(data)
         log.debug(f"saving config:\n{data}")
 
         DBManager().insert_period_data(
@@ -135,13 +134,14 @@ class Orchestrators:
         
         log.info(f"Update required. Checking archived tasks.")
         
-        local_young = int(sync_config.get("archive_young", 0))
-        local_old   = int(sync_config.get("archive_old", 0))
-
-        if local_young < sync_headers["archiveYoung"]:
-            log.info(f"Update of young archive required ({local_young} vs {sync_headers["archiveYoung"]})")
-        if local_old < sync_headers["archiveOld"]:
-            log.info(f"Update of old archive required ({local_old} vs {sync_headers["archiveOld"]})")
+        # FIXME: seems that if headers dont have data, it shows "UPDATE_ALL_REV" 
+        # rather than a single integer.
+        # local_young = int(sync_config.get("archive_young", 0))
+        # local_old   = int(sync_config.get("archive_old", 0))
+        # if local_young < sync_headers["archiveYoung"]:
+        #     log.info(f"Update of young archive required ({local_young} vs {sync_headers["archiveYoung"]})")
+        # if local_old < sync_headers["archiveOld"]:
+        #     log.info(f"Update of old archive required ({local_old} vs {sync_headers["archiveOld"]})")
         
         last_sync_date = datetime.fromtimestamp(sync_config["last_update"]/1000, tz=timezone.utc).date()
         log.info(f"Updating to latest SP data with active tasks after {last_sync_date}.")

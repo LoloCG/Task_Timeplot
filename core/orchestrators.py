@@ -74,14 +74,23 @@ class StartSequence:
 class Orchestrators:        
     @staticmethod
     def plot_daily_hours_bars(*_, course:str=None, period:str=None):
-        if course or period is None:
-            config = JsonConfigManager().load_json_config()["current_period_data"]
-            course=config["current_course"]
-            period=config["current_period"]
+        if course or period is None: course, period = get_current_period_config()
+            # config = JsonConfigManager().load_json_config()["current_period_data"]
+            # course=config["current_course"]
+            # period=config["current_period"]
 
         log.debug(f"Plotting daily data for {course}, {period}")
         df = DBManager().get_daily_data(course, period)
         Charts.plot_daily_stack_bar(df)
+    
+    @staticmethod
+    def plot_total_horus_bars(*_, course:str=None, period:str=None):
+        if course or period is None: course, period = get_current_period_config()
+
+        log.debug(f"Plotting total hours data for {course}, {period}")
+        df = DBManager().get_daily_data(course, period)
+
+        Charts.plot_total_period_hours_bars(df)
 
     @staticmethod
     def insert_df_to_db(df, ccourse, cperiod, cstart):
@@ -180,4 +189,9 @@ class Orchestrators:
         }
         
 
+def get_current_period_config(): # -> [str, str]:
+    config = JsonConfigManager().load_json_config()["current_period_data"]
+    course=config["current_course"]
+    period=config["current_period"]
 
+    return course, period

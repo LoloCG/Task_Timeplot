@@ -66,6 +66,7 @@ class MainMenuLayout(BoxLayout):
     def display_options(self):
         options = {
             "Display Period Hours (bars)": Orchestrators.plot_daily_hours_bars,
+            "Display total Period Hours": Orchestrators.plot_total_horus_bars
         }
         scroll = ScrollView(size_hint=(1, 1))
         glayout = GridLayout(cols=1, spacing=10, size_hint_y=None, padding=(0, 10))

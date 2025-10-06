@@ -1,8 +1,21 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 
 from utils.logger import LoggerSingleton
 log = LoggerSingleton().get_logger()
+
+CHART_THEME = 'seaborn-v0_8-dark' #'seaborn-v0_8-darkgrid' # 'dark_background' # 'seaborn-v0_8-paper'
+# Use the following after plt.style.use to create custom colors (?)  
+# plt.rcParams.update({
+#     "axes.facecolor": "#121212",
+#     "figure.facecolor": "#121212",
+#     "grid.color": "#444444",
+#     "axes.labelcolor": "white",
+#     "xtick.color": "white",
+#     "ytick.color": "white",
+#     "text.color": "white"
+# })
 
 class Charts:
     @classmethod
@@ -21,7 +34,7 @@ class Charts:
             values='time_spent_hrs',
             fill_value=0
         )
-        plt.style.use('seaborn-v0_8-paper')
+        plt.style.use(CHART_THEME)
         
         fig, ax = plt.subplots(figsize=(8, 4))
         ax.set_axisbelow(True)
@@ -42,6 +55,52 @@ class Charts:
         ax.set_ylim(bottom=0)
         ax.set_ylabel('Time Spent (Hours)')  #, color='0.8'
  
+        plt.tight_layout()
+        plt.show()
+        return
+
+    @classmethod
+    def plot_total_period_hours_bars(cls, df):
+        if df is None or df.empty:
+            log.error("No data to plot")
+            return None
+
+        dff = df.copy()
+        dff = dff[dff["subject"].notna()]
+        dff = dff[dff["subject"].astype(str).str.lower() != "none"]
+        
+        if dff.empty:
+            log.warning("No valid subjects to plot after filtering")
+            return None
+        
+        totals = (
+            dff.groupby("subject", as_index=False)["time_spent_hrs"]
+            .sum()
+            .sort_values("time_spent_hrs", ascending=False)
+        )
+        log.debug("Grouped dataframe generated:")
+        print(totals)
+
+        title = f"{df['course'].iloc[0]} — {df['period'].iloc[0]}: total hours by subject"
+
+        plt.style.use(CHART_THEME)
+        fig, ax = plt.subplots(figsize=(10, 5))
+
+        ax.bar(totals["subject"], totals["time_spent_hrs"])
+
+        ax.set_axisbelow(True)
+        ax.grid(True, which="major", axis="y", ls="-")
+
+        ax.set_xlabel("Subject")
+        ax.set_ylabel("Time Spent (Hours)")
+        if title:
+            ax.set_title(title)
+
+        # Value labels on top of bars
+        for i, v in enumerate(totals["time_spent_hrs"].to_numpy()):
+            ax.text(i, v, f"{v:.2f}", ha="center", va="bottom", fontsize=12)
+
+        plt.xticks(rotation=45, ha="right")
         plt.tight_layout()
         plt.show()
         return

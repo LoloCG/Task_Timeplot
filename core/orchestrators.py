@@ -133,7 +133,7 @@ class Orchestrators:
         
         importer = SPImportManager(sync_config["sync_file_path"])
         sync_headers = importer.get_last_update_nums()
-        log.debug(f"sync headers = {sync_headers}")
+        # log.debug(f"sync headers = {sync_headers}")
 
         update_needed = (sync_headers["lastUpdate"] > sync_config.get("last_update",0))
 
@@ -168,8 +168,10 @@ class Orchestrators:
         Orchestrators.upsert_df_to_db(df)
 
         JsonConfigManager().json_upsert({
-            "last_update":sync_headers["lastUpdate"],
-            "update_date":str(datetime.now(timezone.utc))
+            "sync_data": {
+                "last_update":sync_headers["lastUpdate"],
+                "update_date":str(datetime.now(timezone.utc))
+            }
         })
 
     @staticmethod

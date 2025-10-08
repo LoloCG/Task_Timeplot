@@ -182,14 +182,75 @@ class Orchestrators:
 
         df = DBManager().get_daily_data()
         last_db_day = df['date'].max()
+
+        log.debug(f"last db day={last_db_day}")
+        
         total_hours_last_day = df.loc[df['date'] == last_db_day, 'time_spent_hrs'].sum()
+        
+        week_df = get_week_df(df)
+        log.debug(f"Week data:\n{week_df}")
+        
+        total_week_hours = week_df['time_spent_hrs'].sum()
+        avg_week_daily = (
+            week_df.groupby('date')['time_spent_hrs']
+            .sum()
+            .mean()
+        )
 
         return {
             "last_sync":last_dt_sync.date(),
             "last_db_day": last_db_day.date(),
-            "last_db_hrs":total_hours_last_day
+            "last_db_hrs":total_hours_last_day,
+            'avg_week_daily':avg_week_daily,
+            'total_week_hours':total_week_hours
         }
-        
+
+def this_week(last_db_day):
+    return
+
+def get_week_df(
+    df: pd.DataFrame,
+    anchor_date: str | pd.Timestamp | None = None,
+    week_start: str = "MON",
+    ) -> dict:
+
+    data = df.copy()
+    data['date'] = pd.to_datetime(data['date'], errors="coerce")
+    if data['date'].isna().any():
+        raise ValueError(f"Some values in {'date'} could not be parsed to datetime.")
+    
+    if anchor_date is None:
+        anchor_ts = pd.Timestamp.today()
+    else:
+        anchor_ts = pd.Timestamp(anchor_date)
+    wk_start, wk_end_inclusive = _week_bounds(anchor_ts, week_start=week_start)
+
+    wk_end_exclusive = wk_start + pd.Timedelta(days=7)
+    mask = (data['date'] >= wk_start) & (data['date'] < wk_end_exclusive)
+    window_desc = f"[{wk_start} … {wk_end_exclusive}) ({week_start}-based)" # unsure why this exists..
+    
+    log.debug(f"Selecting weekly data from {wk_start} to {wk_end_inclusive}: window_desc={window_desc}")
+
+    week_df = data.loc[mask].sort_values('date')
+    
+    return week_df
+
+def _week_bounds(
+        anchor_ts: pd.Timestamp, 
+        week_start: str = "MON"
+    ) -> tuple[pd.Timestamp, pd.Timestamp]:
+    """Returns the start and end of a week, given an anchor timestamp. 
+    Accepts day of start as MON or SUN"""
+    
+    WEEK_START_IDX = {"MON": 0, "SUN": 6}
+    start_idx = WEEK_START_IDX[week_start.upper()]
+
+    anchor_norm = anchor_ts.normalize()
+    delta_days = (anchor_norm.weekday() - start_idx) % 7
+    wk_start = anchor_norm - pd.Timedelta(days=delta_days)
+    wk_end_inclusive = wk_start + pd.Timedelta(days=6)
+    return wk_start, wk_end_inclusive
+
 
 def get_current_period_config(): # -> [str, str]:
     config = JsonConfigManager().load_json_config()["current_period_data"]

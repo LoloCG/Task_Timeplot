@@ -30,7 +30,10 @@ class StatsPanel(GridLayout):
         rows = [
             ("Last sync", stats.get("last_sync", "-")),
             ("Last day in DB", stats.get("last_db_day", "-")),
-            ("Hours worked today", f"{stats.get('last_db_hrs', 0):.2f}"),
+            ("Hours worked last day", f"{stats.get('last_db_hrs', 0):.2f}"),
+            ("This week hours", f"{stats.get('total_week_hours', 0):.2f}"),
+            ("Week daily avg", f"{stats.get('avg_week_daily', 0):.2f}"),
+
         ]
         for label, value in rows:
             self.add_widget(

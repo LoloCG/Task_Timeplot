@@ -130,8 +130,10 @@ class Orchestrators:
         config = config_mng.load_json_config()
 
         sync_config = config["sync_data"]
-        
-        importer = SPImportManager(sync_config["sync_file_path"])
+        sync_path = sync_config["sync_file_path"]
+        log.debug(f"Checking sync data from: $sync_path")
+
+        importer = SPImportManager(sync_path)
         sync_headers = importer.get_last_update_nums()
         # log.debug(f"sync headers = {sync_headers}")
 
@@ -167,12 +169,10 @@ class Orchestrators:
         df = importer.convert_tasks_to_df(flat_tasks, cstart=None)
         Orchestrators.upsert_df_to_db(df)
 
-        JsonConfigManager().json_upsert({
-            "sync_data": {
-                "last_update":sync_headers["lastUpdate"],
-                "update_date":str(datetime.now(timezone.utc))
-            }
-        })
+        # json_upsert does a shallow update of data. So data specific to config is updated here instead.        
+        sync_config["last_update"] = sync_headers["lastUpdate"]
+        sync_config["update_date"] = str(datetime.now(timezone.utc))
+        JsonConfigManager().json_upsert({"sync_data": sync_config})
 
     @staticmethod
     def get_basic_stats(*_) -> dict:
@@ -189,7 +189,7 @@ class Orchestrators:
         
         week_df = get_week_df(df)
         log.debug(f"Week data:\n{week_df}")
-        
+
         total_week_hours = week_df['time_spent_hrs'].sum()
         avg_week_daily = (
             week_df.groupby('date')['time_spent_hrs']
@@ -250,7 +250,6 @@ def _week_bounds(
     wk_start = anchor_norm - pd.Timedelta(days=delta_days)
     wk_end_inclusive = wk_start + pd.Timedelta(days=6)
     return wk_start, wk_end_inclusive
-
 
 def get_current_period_config(): # -> [str, str]:
     config = JsonConfigManager().load_json_config()["current_period_data"]

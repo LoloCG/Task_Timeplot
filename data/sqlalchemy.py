@@ -53,7 +53,7 @@ class DBManager():
         TABLE_MAP = {
             'main': MainDataTable,
             'daily': DailyDataTable,
-            'weekly': WeeklyDataTable,
+            # 'weekly': WeeklyDataTable,
         }
         tbl = TABLE_MAP[table]
 
@@ -108,6 +108,7 @@ class DBManager():
         finally:
             session.close()
 
+    '''
     def insert_weekly_data(self, df: pd.DataFrame):
         log.debug("Inserting to weekly_data table.")
         session = self.session()
@@ -122,6 +123,7 @@ class DBManager():
             raise
         finally:
             session.close()
+    '''
 
     def get_daily_data(self,
         course: str | None = None,
@@ -196,6 +198,7 @@ class DailyDataTable(Base):
                         primary_key=True,nullable=True)
     time_spent_hrs  = Column(Float)
 
+''' Removed until implementation
 class WeeklyDataTable(Base):
     __tablename__ = 'weekly_data'
     id              = Column(Integer, 
@@ -206,3 +209,4 @@ class WeeklyDataTable(Base):
     week_number     = Column(Integer)
     week            = Column(String)
     time_spent_hrs  = Column(Float)
+'''

@@ -77,9 +77,10 @@ class DFTransformers:
 
         return df
 
-    @staticmethod
-    def daily_to_weekly_clean(df_daily):
-        ''' (generated w/ gpt o4-mini)
+    '''    
+    Removed until implementation added 
+        ----
+        (generated w/ gpt o4-mini)
         Build a Mon-Sun weekly summary (including zero-hour weeks) from a daily hours DataFrame.
 
         Parameters
@@ -100,7 +101,11 @@ class DFTransformers:
             - week : a pandas Period (W-SUN) labeling each Mon-Sun week
             - time_spent_hrs : total hours per week (zeros where no activity)
             - week_number : sequential week index within each period
-        '''
+
+        ----
+    @staticmethod
+    def daily_to_weekly_clean(df_daily):
+
         log.debug(f"Generating weekly hours")
 
         df = df_daily.copy()
@@ -152,7 +157,7 @@ class DFTransformers:
         result['week'] = result['week'].astype(str)
         log.debug(f"Produced {len(result)} weekly rows over {len(out)} periods")
         return result
-
+    '''
 
 
 

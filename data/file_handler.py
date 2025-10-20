@@ -369,8 +369,8 @@ class AbstractSpoonTDLImporter:
             df_daily = DFTransformers.basic_to_daily_clean(df_basic=df_clean, periods_start=periods_start)
             DBManager.insert_daily_data(df_daily)
 
-            df_weekly = DFTransformers.basic_to_weekly_clean(df_daily=df_daily)
-            DBManager.insert_weekly_data(df_weekly)
+            # df_weekly = DFTransformers.basic_to_weekly_clean(df_daily=df_daily)
+            # DBManager.insert_weekly_data(df_weekly)
             
             log.info(f"Imported file {files.index(file)+1}/{len(files)}: {file} ")
         
@@ -505,7 +505,6 @@ class JsonConfigManager:
             return {}
 
     def json_upsert(self, new_data, ):
-        """update or insert, and save the config data."""
         cfg_file = Path(self.path)
         if cfg_file.exists():
             with open(cfg_file, 'r') as file:

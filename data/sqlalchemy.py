@@ -160,6 +160,24 @@ class DBManager():
 
         return df
 
+    def get_subjects(self, course=None, period=None):
+        with self.session() as s:
+            # Start from distinct subjects
+            q = s.query(MainDataTable.subject).distinct()
+
+            # Apply optional filters
+            if course is not None:
+                q = q.filter(MainDataTable.course == course)
+            if period is not None:
+                q = q.filter(MainDataTable.period == period)
+
+            # Order for stable, human-friendly output
+            q = q.order_by(MainDataTable.subject.asc())
+
+            # `q.all()` returns a list of 1-tuples when selecting a single column
+            subjects = [row[0] for row in q.all()]
+        return subjects
+
 class MainDataTable(Base):
     __tablename__ = 'main_data'
     course          = Column(String, 

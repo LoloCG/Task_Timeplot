@@ -74,10 +74,10 @@ class StartSequence:
 class Orchestrators:        
     @staticmethod
     def plot_daily_hours_bars(*_, course:str=None, period:str=None):
-        if course or period is None: course, period = get_current_period_config()
-            # config = JsonConfigManager().load_json_config()["current_period_data"]
-            # course=config["current_course"]
-            # period=config["current_period"]
+        if course or period is None: 
+            config = get_current_period_config()
+            course=config["current_course"]
+            period=config["current_period"]
 
         log.debug(f"Plotting daily data for {course}, {period}")
         df = DBManager().get_daily_data(course, period)
@@ -85,7 +85,11 @@ class Orchestrators:
     
     @staticmethod
     def plot_total_horus_bars(*_, course:str=None, period:str=None):
-        if course or period is None: course, period = get_current_period_config()
+
+        if course or period is None: 
+            config = get_current_period_config()
+            course=config["current_course"]
+            period=config["current_period"]
 
         log.debug(f"Plotting total hours data for {course}, {period}")
         df = DBManager().get_daily_data(course, period)
@@ -205,6 +209,7 @@ class Orchestrators:
             'total_week_hours':total_week_hours
         }
 
+
 def this_week(last_db_day):
     return
 
@@ -251,9 +256,5 @@ def _week_bounds(
     wk_end_inclusive = wk_start + pd.Timedelta(days=6)
     return wk_start, wk_end_inclusive
 
-def get_current_period_config(): # -> [str, str]:
-    config = JsonConfigManager().load_json_config()["current_period_data"]
-    course=config["current_course"]
-    period=config["current_period"]
-
-    return course, period
+def get_current_period_config()-> dict:
+    return JsonConfigManager().load_json_config()["current_period_data"]

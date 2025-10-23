@@ -176,6 +176,7 @@ class DBManager():
 
             # `q.all()` returns a list of 1-tuples when selecting a single column
             subjects = [row[0] for row in q.all()]
+        log.debug(f"Extracted from db subjects from course={course}, period={period}")
         return subjects
 
 class MainDataTable(Base):

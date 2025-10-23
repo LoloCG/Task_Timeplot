@@ -1,8 +1,9 @@
 import os
 os.environ['KIVY_LOG_MODE'] = 'PYTHON'
 
-from core.orchestrators import Orchestrators, StartSequence
+from core.orchestrators import Orchestrators, StartSequence, get_current_period_config
 from data.sqlalchemy import DBManager
+from data.file_handler import JsonConfigManager
 
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
@@ -14,7 +15,7 @@ from kivy.uix.scrollview import ScrollView
 from kivy.lang import Builder
 from kivy.uix.screenmanager import ScreenManager, Screen
 
-from interface.new_period_popup import AddPeriodPopup
+from interface.popups import AddPeriodPopup, ExcludeSubjectsPopup
 
 from utils.logger import LoggerSingleton
 log = LoggerSingleton().get_logger()
@@ -82,9 +83,20 @@ class MainMenuLayout(BoxLayout):
         return scroll
 
     def open_add_period(self):
+        def on_submit(data: dict): 
+            log.info(data)
+            log.info(f"Feature not yet added.")
+        AddPeriodPopup(on_submit=on_submit).open() 
 
-        def on_submit(data: dict): log.info(data)
-        AddPeriodPopup(on_submit=on_submit).open()    
+    def open_exclude_subjects(self):
+        def on_submit(data: dict): 
+            log.info(data)
+   
+        ExcludeSubjectsPopup( 
+            cnfg_mng=JsonConfigManager,
+            db_mng=DBManager,
+            on_submit=on_submit
+        ).open() 
 
 KV_main_layout='''
 <StatsPanel>:
@@ -114,6 +126,14 @@ KV_main_layout='''
         Widget:
         Widget:
 
+        Button:
+            id: exclude_subjects_btn
+            text: "Exclude subjects"
+            font_size:12
+            size_hint: 1, 1
+            height: 44
+            on_press: root.open_exclude_subjects()
+    
     # Title
     Label:
         text: "Study Hours Analytics"
@@ -172,5 +192,3 @@ class MainWindows(App):
                     return MainMenuLayout
 
             AddPeriodPopup(on_submit=on_submit).open()
-
-        

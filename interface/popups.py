@@ -3,6 +3,9 @@ from kivy.lang import Builder
 from kivy.properties import StringProperty, ObjectProperty
 from kivy.uix.togglebutton import ToggleButton
 
+from utils.logger import LoggerSingleton
+log = LoggerSingleton().get_logger()
+
 AddPeriodPopupKv = '''
 <AddPeriodPopup>:
     title: "Add Period"
@@ -131,7 +134,7 @@ Builder.load_string(AddPeriodPopupKv)
 
 ExcludeSubjectsPopupKv = '''
 <ExcludeSubjectsPopup>:
-    title: root.dialog_title
+    title: "Select Subjects"
     size_hint: 0.85, 0.6
     auto_dismiss: True
 
@@ -181,20 +184,39 @@ class ExcludeSubjectsPopup(Popup):
     dialog_title = StringProperty("Select subjects to exclude")
 
     def __init__(
-            self, subjects_list:list, fresh_start=False, 
+            self, cnfg_mng,
+            subjects_list:list=None, 
+            db_mng=None,
             on_submit=None,
-            course_name="", period_name="",
+            course_name=None, period_name=None,
             **kwargs,
             ):
         
         super().__init__(**kwargs)
         self.on_submit = on_submit
-        self.course_name = course_name
-        self.period_name = period_name
+        self.cnfg_mng  = cnfg_mng
 
-        self.subjects_list = subjects_list
+        self.default_exclude = None
+        if course_name is None and period_name is None:
+            config = cnfg_mng().load_json_config()["current_period_data"]
+            self.course_name=config["current_course"]
+            self.period_name=config["current_period"]
+            self.default_exclude = config.get("default_exclude", None)
 
-        self.dialog_title = f"Exclude subjects from {course_name} - {period_name}"
+        else:
+            self.course_name = course_name
+            self.period_name = period_name
+
+        if subjects_list is None:
+            self.subjects_list = db_mng().get_subjects(self.course_name, self.period_name)
+
+        else:
+            self.subjects_list = subjects_list
+        
+        self.subjects_list = [s for s in self.subjects_list if s not in self.default_exclude]
+        log.debug(f"Subject list={self.subjects_list}")
+
+        self.dialog_title = f"Exclude subjects from {self.course_name} - {self.period_name}"
         
         self._build_subject_list()
 
@@ -228,17 +250,13 @@ class ExcludeSubjectsPopup(Popup):
     def handle_ok(self):
         selected = self._collect_selected_subjects()
         payload = selected if selected else None
-
+        
+        if payload: self.cnfg_mng().change_exclude_list(payload)
         
         if callable(self.on_submit):
+            # Behaviour is going to be contained in this popup, but im still leaving the payload here for debug purposes.
             self.on_submit(payload)
+            
         self.dismiss()
-                        
-        # payload = {"test":"testval"}
-
-        # if callable(self.on_submit):
-        #     self.on_submit(payload)
-
-        # self.dismiss()
 
 Builder.load_string(ExcludeSubjectsPopupKv)

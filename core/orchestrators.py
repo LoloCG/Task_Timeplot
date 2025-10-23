@@ -1,4 +1,6 @@
 from datetime import datetime, timezone,  timedelta
+
+from pandas import DataFrame
 from data.sqlalchemy import DBManager
 from data.file_handler import *
 from core.charts import Charts
@@ -81,6 +83,7 @@ class Orchestrators:
 
         log.debug(f"Plotting daily data for {course}, {period}")
         df = DBManager().get_daily_data(course, period)
+        df = filter_df_excluded(df)
         Charts.plot_daily_stack_bar(df)
     
     @staticmethod
@@ -93,6 +96,7 @@ class Orchestrators:
 
         log.debug(f"Plotting total hours data for {course}, {period}")
         df = DBManager().get_daily_data(course, period)
+        df = filter_df_excluded(df)
 
         Charts.plot_total_period_hours_bars(df)
 
@@ -181,14 +185,16 @@ class Orchestrators:
     @staticmethod
     def get_basic_stats(*_) -> dict:
         log.debug(f"Getting basic stats")
-        config = JsonConfigManager().load_json_config()["sync_data"]
-        last_dt_sync = datetime.fromisoformat(config['update_date'])
+        config = JsonConfigManager().load_json_config()
+        config_sync = config["sync_data"]
+        last_dt_sync = datetime.fromisoformat(config_sync['update_date'])
 
         df = DBManager().get_daily_data()
+        filter_df_excluded(df, config.get("current_period_data", {}).get("default_exclude", None))
+
         last_db_day = df['date'].max()
 
         log.debug(f"last db day={last_db_day}")
-        
         total_hours_last_day = df.loc[df['date'] == last_db_day, 'time_spent_hrs'].sum()
         
         week_df = get_week_df(df)
@@ -208,7 +214,6 @@ class Orchestrators:
             'avg_week_daily':avg_week_daily,
             'total_week_hours':total_week_hours
         }
-
 
 def this_week(last_db_day):
     return
@@ -258,3 +263,17 @@ def _week_bounds(
 
 def get_current_period_config()-> dict:
     return JsonConfigManager().load_json_config()["current_period_data"]
+
+def filter_df_excluded(
+    df:pd.DataFrame,
+    excluded_list:list|None=None,
+    ) -> DataFrame:
+
+    if excluded_list is None:
+        excluded_list = JsonConfigManager().load_json_config().get("current_period_data", {}).get("default_exclude", None)
+        if excluded_list is None: return df
+    
+    log.debug(f"Filtering df to exclude {excluded_list}")
+    filter_df = df[~df["subject"].isin(excluded_list)] 
+    return filter_df
+    

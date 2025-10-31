@@ -25,7 +25,7 @@ class Charts:
         Rather than displaying all data from the start of the period, it should 
         display 1 or at max 2 weeks at a time.  
         '''
-        
+
         df = df.sort_values(by='date')
 
         df_pivot = df.pivot_table(
@@ -44,7 +44,13 @@ class Charts:
         bottoms = np.zeros(len(df_pivot)) # generate array of 0 the length of days
         for subject in df_pivot.columns:
             values = df_pivot[subject].to_numpy()
-            ax.bar(dates, values, bottom=bottoms, label=subject) # **bar_param
+            ax.bar(
+                dates, values, 
+                bottom=bottoms, 
+                label=subject,
+                width=pd.Timedelta(days=0.925), 
+                align='edge'
+            ) # **bar_param
             bottoms += values
 
         ax.legend(loc='upper right', frameon=True) # , labelcolor='0.8'
@@ -54,7 +60,11 @@ class Charts:
 
         ax.set_ylim(bottom=0)
         ax.set_ylabel('Time Spent (Hours)')  #, color='0.8'
- 
+        
+        start = df['date'].min().normalize()
+        end = df['date'].max().normalize() + pd.Timedelta(days=1)
+        ax.set_xlim(start, end)
+
         plt.tight_layout()
         plt.show()
         return

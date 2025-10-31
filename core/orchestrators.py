@@ -84,7 +84,10 @@ class Orchestrators:
         log.debug(f"Plotting daily data for {course}, {period}")
         df = DBManager().get_daily_data(course, period)
         df = filter_df_excluded(df)
-        Charts.plot_daily_stack_bar(df)
+        
+        full_df = add_start_date_df(df)
+
+        Charts.plot_daily_stack_bar(full_df)
     
     @staticmethod
     def plot_total_horus_bars(*_, course:str=None, period:str=None):
@@ -198,7 +201,7 @@ class Orchestrators:
         total_hours_last_day = df.loc[df['date'] == last_db_day, 'time_spent_hrs'].sum()
         
         week_df = get_week_df(df)
-        log.debug(f"Week data:\n{week_df}")
+        # log.debug(f"Week data:\n{week_df}")
 
         total_week_hours = week_df['time_spent_hrs'].sum()
         avg_week_daily = (
@@ -276,4 +279,63 @@ def filter_df_excluded(
     log.debug(f"Filtering df to exclude {excluded_list}")
     filter_df = df[~df["subject"].isin(excluded_list)] 
     return filter_df
+
+def add_start_date_df(df_in, start_date=None, course=None, period=None)->pd.DataFrame:
+    '''
+    Backfills a dataframe with date column with empty data on "subject" and "time_spent_hrs".
+    Allows giving it a start_date, a course and period to search the db (TO ADD IN FUTURE), or
+    nothing at all thus using the current period start_date by default.
+    '''
+    def get_period_start_date()-> datetime:
+        period_config = get_current_period_config()
+        raw = period_config.get("period_start_date", None)
+        if raw is None:
+            raise ValueError("period_start_date missing in current period config")
+        return datetime.strptime(raw, '%d-%m-%Y') # expects "15-9-2025"
+
+    df_date_start = pd.Timestamp(df_in['date'].min())
+
+    if (start_date is None and (course is None or period is None)):
+        period_init = get_period_start_date()
+    # elif (course is not None and period is not None):
+    #     #TODO in future. This should search course and period data in db and retrieve the start date. 
+    #     return
+    else:
+        period_init = start_date
+    
+    if period_init == df_date_start:
+        log.debug(f"df has the same initial date as period init.")
+        return df_in
+
+    df = df_in.copy()
+
+    # missing_df = pd.DataFrame({'date': pd.date_range(start=period_init, end=df_date_start)})
+    missing_days = pd.date_range(
+        start=period_init,
+        end=(df_date_start - pd.Timedelta(days=1)),
+        freq='D'
+    )
+    missing_df = pd.DataFrame({'date': missing_days})
+
+    if course and period is None:
+        course_name = df['course'].iloc[0]
+        period_name = df['period'].iloc[0]
+    else:
+        course_name = course
+        period_name = period
+
+    missing_df['course'] = course_name
+    missing_df['period'] = period_name
+    missing_df['subject'] = None
+    missing_df['time_spent_hrs'] = 0.0
+
+    full_df = pd.concat([missing_df, df], ignore_index=True).sort_values('date', kind='stable')
+
+    log.debug(f"Full df after:")
+    log.debug(full_df)
+
+    earliest_date = full_df["date"].min()
+    log.debug(f"Earliest date in full df={earliest_date}")
+
+    return full_df
     

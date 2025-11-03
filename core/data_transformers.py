@@ -21,7 +21,6 @@ class DFTransformers:
             df_period = df[df['period'] == period]
             course_name = df_period['course'].iloc[0]
             
-
             if periods_start is not None:
                 period_min = pd.Timestamp(periods_start[period])
             else:
@@ -77,52 +76,24 @@ class DFTransformers:
 
         return df
 
-    '''    
-    Removed until implementation added 
-        ----
-        (generated w/ gpt o4-mini)
-        Build a Mon-Sun weekly summary (including zero-hour weeks) from a daily hours DataFrame.
-
-        Parameters
-        ----------
-        df_daily : pd.DataFrame
-            A daily-granularity table already zero-filled per period, with columns:
-            - course : identifier for the course
-            - period : academic period name
-            - subject : subject name
-            - date : datetime.date for each day
-            - time_spent_hrs : hours logged on that day
-
-        Returns
-        -------
-        pd.DataFrame
-            A weekly summary DataFrame containing:
-            - course, period, subject
-            - week : a pandas Period (W-SUN) labeling each Mon-Sun week
-            - time_spent_hrs : total hours per week (zeros where no activity)
-            - week_number : sequential week index within each period
-
-        ----
     @staticmethod
-    def daily_to_weekly_clean(df_daily):
-
-        log.debug(f"Generating weekly hours")
-
+    def temp_daily_to_weekly_clean(df_daily):
         df = df_daily.copy()
+
+        # log.debug(f"df_daily:\n{df.tail()}")
         
         df['date'] = pd.to_datetime(df['date'])
-        df['week'] = df['date'].dt.to_period('W-SUN') # .astype(str)
-        
-        weekly = (df
+        df['week'] = df['date'].dt.to_period('W-SUN') # .astype(str) 
+                
+        grouped = (df
             .groupby(['course','period','subject','week'], as_index=False)
             ['time_spent_hrs']
             .sum()
         )
-        
-        # For each period, generate the full list of weeks and left-merge
+
         out = []
-        for period in weekly['period'].unique():
-            part = weekly[weekly['period'] == period].copy()
+        for period in grouped['period'].unique():
+            part = grouped[grouped['period'] == period].copy()
             
             # derive exact calendar bounds from daily data
             days = df[df['period'] == period]
@@ -141,23 +112,23 @@ class DFTransformers:
                 full
                 .merge(part, on='week', how='left')
                 .assign(
-                    time_spent_hrs = lambda d: d['time_spent_hrs'].ffill(),
+                    # time_spent_hrs = lambda d: d['time_spent_hrs'].ffill(),
+                    time_spent_hrs = lambda d: d['time_spent_hrs'].fillna(0),
                     course         = part['course'].iloc[0],
                     period         = period,
                     subject        = lambda d: d['subject'].ffill()
                 )
             )
             
-            # sequential numbering from week 1 → N
-            merged['week_number'] = range(1, len(merged) + 1)
-            
+            week_to_num = {w: i + 1 for i, w in enumerate(full_weeks)}
+            merged['week_number'] = merged['week'].map(week_to_num)
+
             out.append(merged)
         
         result = pd.concat(out, ignore_index=True)
         result['week'] = result['week'].astype(str)
-        log.debug(f"Produced {len(result)} weekly rows over {len(out)} periods")
+
         return result
-    '''
 
 
 

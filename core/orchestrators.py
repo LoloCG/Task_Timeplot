@@ -75,6 +75,26 @@ class StartSequence:
 
 class Orchestrators:        
     @staticmethod
+    def plot_weekly_hours_bars(*_, course:str=None, period:str=None):
+        # TODO: Will use daily data for the time being until weekly data is added to db.
+
+        if course or period is None: 
+            config = get_current_period_config()
+            course=config["current_course"]
+            period=config["current_period"]
+
+        log.debug(f"Plotting weekly data for {course}, {period}")
+        df = DBManager().get_daily_data(course, period)
+        df = filter_df_excluded(df)
+        df = add_start_date_df(df)
+
+        weekly_df = DFTransformers.temp_daily_to_weekly_clean(df)
+        log.debug(f"Weekly df tail:\n{weekly_df.tail()}")
+
+        Charts.plot_weekly_stack_bar(weekly_df)
+        return
+    
+    @staticmethod
     def plot_daily_hours_bars(*_, course:str=None, period:str=None):
         if course or period is None: 
             config = get_current_period_config()

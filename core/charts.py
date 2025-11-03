@@ -53,7 +53,7 @@ class Charts:
             ) # **bar_param
             bottoms += values
 
-        ax.legend(loc='upper right', frameon=True) # , labelcolor='0.8'
+        ax.legend(loc='upper left', frameon=True) # , labelcolor='0.8'
 
         ax.set_xlabel('Date') # , color='0.8'
         plt.xticks(rotation=45)
@@ -68,6 +68,31 @@ class Charts:
         plt.tight_layout()
         plt.show()
         return
+
+    @classmethod
+    def plot_weekly_stack_bar(cls, weekly_df):
+        weekly_df = weekly_df.sort_values(by='week_number').copy()
+
+        df_pivot = weekly_df.pivot_table(
+            index='week',
+            columns='subject',
+            values='time_spent_hrs',
+            fill_value=0
+        )
+        df_pivot['total'] = df_pivot.sum(axis=1)
+
+        log.debug(f"df_pivot weekly:\n{df_pivot}")
+
+        return
+
+        # TODO
+        plt.style.use(CHART_THEME)
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.set_axisbelow(True)
+        ax.grid(True, which='major',axis='y',ls='-')
+
+        x = df_pivot.index
+        ax.bar(x, values, bottom=bottoms, label=subject)
 
     @classmethod
     def plot_total_period_hours_bars(cls, df):

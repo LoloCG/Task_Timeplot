@@ -224,11 +224,9 @@ class Orchestrators:
         # log.debug(f"Week data:\n{week_df}")
 
         total_week_hours = week_df['time_spent_hrs'].sum()
-        avg_week_daily = (
-            week_df.groupby('date')['time_spent_hrs']
-            .sum()
-            .mean()
-        )
+                
+        days_elapsed = datetime.now().date().weekday() + 1
+        avg_week_daily = total_week_hours / days_elapsed
 
         return {
             "last_sync":last_dt_sync.date(),

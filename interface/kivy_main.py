@@ -52,7 +52,7 @@ class StatsPanel(GridLayout):
 class MainMenuLayout(BoxLayout):
     def __init__(self, **kwargs):
         super(MainMenuLayout, self).__init__(**kwargs)
-        Window.size = (500, 450)
+        Window.size = (400, 550)
         Window.minimum_width, Window.minimum_height = 500, 400
         Window.clearcolor = (0.1, 0.1, 0.1, 1)
                 

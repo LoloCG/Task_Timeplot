@@ -213,7 +213,7 @@ class ExcludeSubjectsPopup(Popup):
         else:
             self.subjects_list = subjects_list
         
-        self.subjects_list = [s for s in self.subjects_list if s not in self.default_exclude]
+        # self.subjects_list = [s for s in self.subjects_list if s not in self.default_exclude]
         log.debug(f"Subject list={self.subjects_list}")
 
         self.dialog_title = f"Exclude subjects from {self.course_name} - {self.period_name}"

@@ -34,6 +34,7 @@ class Charts:
             values='time_spent_hrs',
             fill_value=0
         )
+        # log.debug(f"df_pivot daily stacked:\n{df_pivot}")
         plt.style.use(CHART_THEME)
         
         fig, ax = plt.subplots(figsize=(8, 4))
@@ -70,7 +71,7 @@ class Charts:
         return
 
     @classmethod
-    def plot_weekly_stack_bar(cls, weekly_df):
+    def plot_weekly_stack_bar(cls, weekly_df): # TODO
         weekly_df = weekly_df.sort_values(by='week_number').copy()
 
         df_pivot = weekly_df.pivot_table(
@@ -140,125 +141,55 @@ class Charts:
         plt.show()
         return
 
-    @staticmethod
-    def plot_daily_subj_hours_line(df, current_course=None, add_avg=False, roll_avg=None):
-        import matplotlib as mpl
-        import matplotlib.pyplot as plt
-        import matplotlib.patheffects as path_effects # prev PathEffects
-        from matplotlib.ticker import MaxNLocator
-        import matplotlib.colors as cm
-        '''
-            Plots a line chart showing the time spent on different subjects over a period of time.
-        '''
-        def avg_past_courses(df, current_course):
-            df_past = df[(df['course'] != current_course)].copy()
+    @classmethod
+    def plot_rolling_7d_average(cls, df, window=7):
+        """
+        Line chart of rolling N-day average (default 7) of *daily total* study hours.
+        One point per day (continuous dates), including 0 for days with no study.
+        """
+        # Work on a copy
+        df = df.copy()
 
-            df_avg = df_past.groupby('date', as_index=False)['time_spent_hrs'].mean()
+        # Ensure 'date' is datetime
+        df['date'] = pd.to_datetime(df['date'])
 
-            df_avg['course'] = 'Average'
-            df_avg['period'] = 'Average'
-            
-            return df_avg
+        # 1) Aggregate to daily total hours (sum over subjects etc.)
+        daily = (
+            df.groupby('date', as_index=True)['time_spent_hrs']
+              .sum()
+              .sort_index()
+              .rename('total_hours')
+        )
 
-        def roll_avgs(df, period_list):
-            df_avg_list = []
-            for unique_period in period_list:
-                course, period = unique_period.split(';')
-                period_data = df[(df['course'] == course) & (df['period'] == period)].sort_values('date')
-                period_data['rolled_time_spent_hrs'] = period_data['time_spent_hrs'].rolling(window=roll_avg, min_periods=1).mean()
-                df_avg_list.append(period_data)
+        # 2) Build continuous daily index and fill missing days with 0
+        full_index = pd.date_range(
+            start=daily.index.min(),
+            end=daily.index.max(),
+            freq='D'
+        )
+        daily = daily.reindex(full_index, fill_value=0.0)
+        daily.index.name = 'date'
 
-            df_rolled = pd.concat(df_avg_list, ignore_index=True)
+        # 3) Rolling N-day mean (trailing window, including current day)
+        rolling_avg = daily.rolling(window=window, min_periods=1).mean()
 
-            return df_rolled
+        # 4) Plot
+        plt.style.use(CHART_THEME)
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.set_axisbelow(True)
+        ax.grid(True, which='major', axis='y', ls='-')
 
-        df = df.sort_values(by='date')
-        df = df[['course','period', 'date', 'time_spent_hrs']]    
-        df = df.groupby(['course', 'period', 'date'], as_index=False)['time_spent_hrs'].sum().reset_index()
+        ax.plot(rolling_avg.index, rolling_avg.values, label=f'{window}-day rolling avg')
 
-        if add_avg:
-            df_avg_past = avg_past_courses(df, current_course)
-            df = pd.concat([df, df_avg_past[['course', 'period', 'date', 'time_spent_hrs']]], axis=0, ignore_index=True)
-
-        period_list = [] 
-        for course in df['course'].unique():
-            course_data = df[(df['course'] == course)]
-            for period in course_data['period'].unique():
-                unique_period = str(course + ';' + period)
-                period_list.append(unique_period)
-
-        if roll_avg:
-            df = roll_avgs(df, period_list)
-            
-        plt.style.use('bmh')
-
-        fig, ax = plt.subplots(figsize=(11, 6))
-
-        # cmap = cm.get_cmap('Set1', len(period_list)) # Dark2, Set1, inferno, prism
-        cmap = mpl.colormaps['Set1'].resampled(len(period_list))
-        # color_cycle = cycler(color=['#4F81BD', '#C0504D', '#9BBB59', '#8064A2'])  
-        
-
-        fig.set_facecolor('#444444') 
-        current_line_params = {
-            'alpha':        0.8, 
-            'ls':           '-', 
-            'linewidth':    1.7,
-            'color':        '0.9',
-            'zorder':       1,
-        }
-        line_params = {
-            'alpha':        0.7, 
-            'ls':           ':', 
-            'linewidth':    1.5,
-            'zorder':       1
-        }  
-        avg_line_params = {
-            'alpha':        0.8, 
-            'ls':           '-', 
-            'linewidth':    2.25,
-            'color':        '0.7',
-            'zorder':       2,
-        }
-        path_efx_avg = [path_effects.SimpleLineShadow(offset=(0.5, -1), shadow_color='white'), path_effects.Normal()]
-        
-        if roll_avg is not None:
-            plot_data = 'rolled_time_spent_hrs'
-        else: plot_data = 'time_spent_hrs'
-
-        n = 0
-        for unique_period in period_list:
-            course, period = unique_period.split(';')
-            period_data = df[(df['course'] == course) & (df['period'] == period)].sort_values('date')
-
-            if period == 'Average': 
-                ax.plot(period_data['date'], period_data[plot_data], 
-                    label=f'{period}', **avg_line_params,
-                    path_effects=path_efx_avg)
-                continue
-            
-            if course == current_course: # this will have to be modified for more than 1 semester... this is a quick fix...
-                ax.plot(period_data['date'], period_data[plot_data], 
-                    label=f'{course} - {period}',
-                    **current_line_params,
-                    path_effects=path_efx_avg)
-                continue
-
-            ax.plot(period_data['date'], period_data[plot_data], label=f'{course} - {period}', color=cmap(n), **line_params)
-            n += 1
-
-        # ax.set_xlim(left=0)
-        ax.set_xlim(left=df['date'].min())
-        ax.set_ylim(bottom=0)
-        ax.xaxis.set_major_locator(MaxNLocator(nbins=10)) 
-        ax.tick_params(colors='0.8')
-        ax.set_xlabel('date', color='0.8')  # Label for the X axis (date)
-        ax.set_ylabel('Time Spent (Hours)', color='0.8')  
-
-        ax.set_facecolor('#444444')
-        
+        ax.set_xlabel('Date')
+        ax.set_ylabel(f'{window}-day rolling average (hours)')
         plt.xticks(rotation=45)
 
-        ax.legend(loc='upper left', labelcolor='0.8', frameon=False) # , framealpha=0.2
+        ax.set_xlim(rolling_avg.index.min(), rolling_avg.index.max())
+        ax.set_ylim(bottom=0)
+
+        ax.legend(loc='upper left', frameon=True)
+
         plt.tight_layout()
         plt.show()
+        return

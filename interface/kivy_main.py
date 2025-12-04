@@ -71,8 +71,10 @@ class MainMenuLayout(BoxLayout):
         options = {
             "Display Period Hours (bars)": Orchestrators.plot_daily_hours_bars,
             "Display Weekly Hours (bars)": Orchestrators.plot_weekly_hours_bars,
-            "Display total Period Hours": Orchestrators.plot_total_horus_bars
+            "Display total Period Hours": Orchestrators.plot_total_horus_bars,
+            "Display week average (Line)": Orchestrators.plot_week_avg_line,
         }
+        
         scroll = ScrollView(size_hint=(1, 1))
         glayout = GridLayout(cols=1, spacing=10, size_hint_y=None, padding=(0, 10))
         glayout.bind(minimum_height=glayout.setter("height"))

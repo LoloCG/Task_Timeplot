@@ -1,4 +1,7 @@
 from datetime import datetime, timezone,  timedelta
+# from sqlite3 import Date
+# from sys import exception
+# from tracemalloc import start
 
 from pandas import DataFrame
 from data.sqlalchemy import DBManager
@@ -73,7 +76,9 @@ class StartSequence:
             finished=False
         )
 
-class Orchestrators:        
+# class ChartPlotter:
+
+class Orchestrators: 
     @staticmethod
     def plot_weekly_hours_bars(*_, course:str=None, period:str=None):
         # TODO: Will use daily data for the time being until weekly data is added to db.
@@ -122,6 +127,22 @@ class Orchestrators:
         df = filter_df_excluded(df)
 
         Charts.plot_total_period_hours_bars(df)
+
+    @staticmethod
+    def plot_week_avg_line(*_, course:str=None, period:str=None):
+        if course or period is None: 
+            config = get_current_period_config()
+            course=config["current_course"]
+            period=config["current_period"]
+
+        log.debug(f"Plotting 7 day average data for {course}, {period}")
+        df = DBManager().get_daily_data(course, period)
+        df = filter_df_excluded(df)
+        df = add_start_date_df(df)
+
+        Charts.plot_rolling_7d_average(df=df, window=7)
+        return None
+
 
     @staticmethod
     def insert_df_to_db(df, ccourse, cperiod, cstart):
@@ -213,7 +234,7 @@ class Orchestrators:
         last_dt_sync = datetime.fromisoformat(config_sync['update_date'])
 
         df = DBManager().get_daily_data()
-        filter_df_excluded(df, config.get("current_period_data", {}).get("default_exclude", None))
+        df = filter_df_excluded(df, config.get("current_period_data", {}).get("default_exclude", None))
 
         last_db_day = df['date'].max()
 
@@ -348,12 +369,6 @@ def add_start_date_df(df_in, start_date=None, course=None, period=None)->pd.Data
     missing_df['time_spent_hrs'] = 0.0
 
     full_df = pd.concat([missing_df, df], ignore_index=True).sort_values('date', kind='stable')
-
-    log.debug(f"Full df after:")
-    log.debug(full_df)
-
-    earliest_date = full_df["date"].min()
-    log.debug(f"Earliest date in full df={earliest_date}")
 
     return full_df
     

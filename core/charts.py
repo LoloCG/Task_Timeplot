@@ -71,7 +71,63 @@ class Charts:
         return
 
     @classmethod
-    def plot_weekly_stack_bar(cls, weekly_df): # TODO
+    def plot_weekly_stack_bar(cls, weekly_df):
+        """
+        Stacked bar chart for each week, each segment representing each subject.
+        X axis uses the week label (e.g. '2025-10-06/2025-10-12').
+        """
+
+        # Ensure weeks are sorted in time
+        weekly_df = weekly_df.sort_values(by='week_number').copy()
+
+        df_pivot = weekly_df.pivot_table(
+            index='week',
+            columns='subject',
+            values='time_spent_hrs',
+            fill_value=0
+        )
+        # total column kept for logging / checks, not plotted directly
+        df_pivot['total'] = df_pivot.sum(axis=1)
+        # log.debug(f"df_pivot weekly:\n{df_pivot}")
+
+        plt.style.use(CHART_THEME)
+
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.set_axisbelow(True)
+        ax.grid(True, which='major', axis='y', ls='-')
+
+        weeks = df_pivot.index
+        x = np.arange(len(weeks))
+
+        # start all stacks at zero
+        bottoms = np.zeros(len(df_pivot))
+
+        # subjects are all columns except 'total'
+        subjects = [col for col in df_pivot.columns if col != 'total']
+
+        for subject in subjects:
+            values = df_pivot[subject].to_numpy()
+            ax.bar(
+                x,
+                values,
+                bottom=bottoms,
+                label=subject,
+            )
+            bottoms += values
+
+        ax.legend(loc='upper left', frameon=True)
+
+        ax.set_xlabel('Week')
+        ax.set_ylabel('Time Spent (Hours)')
+        ax.set_ylim(bottom=0)
+
+        ax.set_xticks(x)
+        ax.set_xticklabels(weeks, rotation=45, ha='right')
+
+        plt.tight_layout()
+        plt.show()
+        return
+    
         weekly_df = weekly_df.sort_values(by='week_number').copy()
 
         df_pivot = weekly_df.pivot_table(
@@ -115,7 +171,8 @@ class Charts:
             .sort_values("time_spent_hrs", ascending=False)
         )
         log.debug("Grouped dataframe generated:")
-        print(totals)
+
+        print(totals.to_csv(sep=";", index=False, header=False))
 
         title = f"{df['course'].iloc[0]} — {df['period'].iloc[0]}: total hours by subject"
 

@@ -94,7 +94,7 @@ class Orchestrators:
         df = add_start_date_df(df)
 
         weekly_df = DFTransformers.temp_daily_to_weekly_clean(df)
-        log.debug(f"Weekly df tail:\n{weekly_df.tail()}")
+        # log.debug(f"Weekly df tail:\n{weekly_df.tail()}")
 
         Charts.plot_weekly_stack_bar(weekly_df)
         return
@@ -143,7 +143,6 @@ class Orchestrators:
         Charts.plot_rolling_7d_average(df=df, window=7)
         return None
 
-
     @staticmethod
     def insert_df_to_db(df, ccourse, cperiod, cstart):
         db = DBManager()
@@ -183,11 +182,11 @@ class Orchestrators:
 
         sync_config = config["sync_data"]
         sync_path = sync_config["sync_file_path"]
-        log.debug(f"Checking sync data from: $sync_path")
+        log.debug(f"Checking sync data from: {sync_path}")
 
         importer = SPImportManager(sync_path)
         sync_headers = importer.get_last_update_nums()
-        # log.debug(f"sync headers = {sync_headers}")
+        log.debug(f"sync headers = {sync_headers}")
 
         update_needed = (sync_headers["lastUpdate"] > sync_config.get("last_update",0))
 
@@ -218,6 +217,8 @@ class Orchestrators:
             cperiod=ccourse_config["current_period"], 
             filter_date=last_sync_date
         )
+        # FIXME: seems that if it needs to update but does not find any task, it generates empty 
+        #   `flat_tasks`, crashing the importer.convert_tasks_to_df
         df = importer.convert_tasks_to_df(flat_tasks, cstart=None)
         Orchestrators.upsert_df_to_db(df)
 
@@ -257,8 +258,57 @@ class Orchestrators:
             'total_week_hours':total_week_hours
         }
 
-def this_week(last_db_day):
-    return
+    @staticmethod
+    def import_past_data(*_):
+        from data.file_handler import convert_csv_to_df
+        log.warning("Selected to import past data")
+
+        df_clean = convert_csv_to_df(n=1)
+
+        print(df_clean.tail(5))
+
+        # piv = pivot_time_by_subject_period(df_clean)
+        # print(piv)
+
+        return
+
+def pivot_time_by_subject_period(
+    df: pd.DataFrame,
+    time_col: str = "time_spent_hrs",
+    subject_col: str = "subject",
+    period_col: str = "period",
+    course_col: str | None = "course",
+    fill_value: float = 0.0,
+    add_margins: bool = True,
+) -> pd.DataFrame:
+    """
+    Returns a pivot table with total accumulated hours per subject per period.
+    Rows: subject
+    Columns: period
+    Values: sum(time_spent_hrs)
+    Optionally filters by course if df contains multiple courses and course_col is provided.
+    """
+
+    if course_col and course_col in df.columns:
+        # If multiple courses exist, keep them separated by adding course to the index.
+        index = [course_col, subject_col]
+    else:
+        index = [subject_col]
+
+    piv = pd.pivot_table(
+        df,
+        index=index,
+        columns=period_col,
+        values=time_col,
+        aggfunc="sum",
+        fill_value=fill_value,
+        margins=add_margins,
+        margins_name="Total",
+    )
+
+ 
+    piv.columns = piv.columns.astype(str)
+    return piv.sort_index()
 
 def get_week_df(
     df: pd.DataFrame,

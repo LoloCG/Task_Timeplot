@@ -17,7 +17,6 @@ def stream_json_file(file_path: Path, chunk_size:int=64, limit=None):
     in the SuperProductivity json dump.
     Reads in small chunks of 64 bits until "{" character is seen,
     indicating json start(?).
-
     """
     with open(file_path, "rb") as f:
         header_buf = b""
@@ -51,7 +50,7 @@ class SPImportManager:
         self.sp_path     = sp_path
     
     def get_last_update_nums(self) -> dict:
-        lastUpdate = None 
+        lastModified = None 
         archiveYoung = None
         archiveOld = None
         e_types = ["number", "string", "null"]
@@ -59,21 +58,21 @@ class SPImportManager:
         for prefix, event, value in stream_json_file(file_path=self.sp_path):
             parts = prefix.split(".")
 
-            if (parts[0] == "lastUpdate" and event in e_types):
-                lastUpdate = value
+            if (parts[0] == "lastModified" and event in e_types):
+                lastModified = value
             elif (parts[:2] == ["revMap","archiveYoung"] and event in e_types):
                 archiveYoung = value
             elif (parts[:2] == ["revMap","archiveOld"] and event in e_types):
                 archiveOld = value
 
-            if (lastUpdate is not None and
+            if (lastModified is not None and
                 archiveYoung is not None and
                 archiveOld is not None):
+                log.info("No sync update numbers found.")
                 break
 
-
         data = {
-            "lastUpdate":   lastUpdate,
+            "lastUpdate":   lastModified,
             "archiveYoung": archiveYoung if archiveYoung is not isinstance(archiveYoung, str) else 0,
             "archiveOld":   archiveOld if archiveOld is not isinstance(archiveOld, str) else 0,
         }
@@ -127,10 +126,11 @@ class SPImportManager:
         '''     
 
         if filter_date is not None:
-            cutoff: date = filter_date 
+            cutoff: date = filter_date
+            log.debug(f"Cutoff date={cutoff}") 
         else:
             cutoff = None
-
+    
         max_day_seen = date.min
 
         tasks = {}
@@ -181,7 +181,6 @@ class SPImportManager:
 
                     # Don’t fall through into task logic
                     continue
-
 
             # --------------- Current Tasks --------------- #
             # Detect start of a task object
@@ -482,6 +481,143 @@ class AbstractSpoonTDLImporter:
         })
 
         return df_clean
+
+def convert_csv_to_df(file_num=0, csv_paths_folder:list="past_data", json_config_path=r"past_data\past_courses_csv_data.json"):
+    from utils.excel_importer import ExcelImporter
+    from pathlib import Path
+    from data.sqlalchemy import DBManager
+
+    eimp = ExcelImporter().select_folder(csv_paths_folder)
+    files = eimp.list_folder_excel_files()
+    log.info(f"Past courses .csv files: {files}")
+    
+    config = None
+    with open(json_config_path) as json_file: 
+        config = json.load(json_file)
+        log.info(f"Imported json config in {json_config_path}")
+
+    file = files[file_num]
+    log.info(f'Importing CSV file "{file}"')
+    raw_df = ExcelImporter(csv_paths_folder).get_df_from_file(filename=file)
+    
+    base_filename = os.path.splitext(file)[0].strip()
+    entry = next(
+        cfg for cfg in config
+        if cfg["csv_filename"].strip() == base_filename
+    )
+        
+    course_name         = entry["course_name"]
+    period_mappings     = entry["periods"]
+
+    print(f"Cleaning course={course_name} in {base_filename}")
+    df_clean = perform_basic_cleaning(raw_df, new_course_name=course_name, period_mappings=period_mappings)
+    return df_clean
+
+def perform_basic_cleaning(
+        df_raw, 
+        new_course_name: str,
+        period_mappings
+    ):
+    from utils.df_cleaner import DFCleaner
+    '''
+    - Removes irrelevant columns
+    - Splits "Path" column into Period, subject and task
+    - consolidates date and time into a single DateTime for start and end times
+    - parses Time Spent to 
+    '''
+    def delete_negative_times(df, margin = 0.008, time_threshold = 0.5, date_threshold = pd.Timedelta(days=2)):
+
+        negval_condition = (df['Time Spent (Hrs)'] < 0) & (df['Type'] == 'Adjusted')
+        pos_rows = df[~negval_condition]
+        neg_rows = df[negval_condition]
+
+        for _, neg_row in neg_rows.iterrows():
+            close_condition = (
+                (abs(pos_rows['Time Spent (Hrs)'] + neg_row['Time Spent (Hrs)']) < time_threshold) & 
+                (abs(pos_rows['End Date'] - neg_row['End Date']) < date_threshold)
+            )
+            pos_rows = pos_rows[~close_condition]
+
+        pos_rows = pos_rows[~(pos_rows['Time Spent (Hrs)'] <= margin)]
+
+        ini_neg = len(df[df['Time Spent (Hrs)'] < 0])
+        post_neg = len(pos_rows[pos_rows['Time Spent (Hrs)'] < 0])
+        log.debug(f"Deleted {post_neg-ini_neg} negative values and removed {len(pos_rows)-len(df)} total rows")
+
+        return pos_rows
+    
+    def join_dates_times(df):
+        # combine date + time into one Timestamp column
+        df['Start Date'] = pd.to_datetime(df['Start Date'], errors='coerce')
+        df['End Date']   = pd.to_datetime(df['End Date'],   errors='coerce')
+
+        df['Start Time'] = df['Start Time'].astype(str).str.strip()
+        df['End Time']   = df['End Time'].astype(str).str.strip()
+
+        df['Start DateTime'] = pd.to_datetime(
+            df['Start Date'].dt.strftime('%Y-%m-%d') + ' ' + df['Start Time'],
+            format='%Y-%m-%d %H:%M',
+            errors='coerce'
+        )
+        df['End DateTime'] = pd.to_datetime(
+            df['End Date'].dt.strftime('%Y-%m-%d')   + ' ' + df['End Time'],
+            format='%Y-%m-%d %H:%M',
+            errors='coerce'
+        )
+        return df
+    
+    def rename_course_and_periods(df):
+        df['Course'] = new_course_name
+        
+        mapping = {
+            m["csv_period_name"]: m["edited_period_name"]
+            for m in period_mappings
+        }
+        df = df[df["Period"].isin(mapping)]             # keep only the allowed Period
+        df.loc[:, "Period"] = df["Period"].map(mapping) # rename them to the edited names
+
+        return df
+
+    df_raw = df_raw.reindex(columns=['Start Date', 'Start Time', 'End Date', 'End Time', 'Time Spent (Hrs)', 'Path', 'Title', 'Type'])
+    cleaner = DFCleaner(df_raw)
+
+    new_columns = ['Period', 'Subject', 'pathinfo']
+    cleaner.split_column(column='Path', separator='\\', new_columns=new_columns, expand=True, drop_old=True)
+
+    cleaner.normalize_column_strings(column='Subject')
+
+    cleaner.convert_df_dates(date_column='Start Date', single_col=True)
+    cleaner.convert_df_dates(date_column='End Date', single_col=True)
+    cleaner.convert_df_times(time_column='Start Time', single_col=True)
+    cleaner.convert_df_times(time_column='End Time', single_col=True)
+
+    cleaner.dataframe = join_dates_times(cleaner.dataframe)  
+
+    cleaner.replace_comma_to_dot(column='Time Spent (Hrs)')
+
+    cleaner.dataframe = delete_negative_times(cleaner.dataframe)
+    
+    df_raw = cleaner.dataframe
+    
+    df_raw = rename_course_and_periods(df_raw)
+
+    df_raw = df_raw.drop(columns=[
+        'Start Date','Start Time',
+        'End Date','End Time',
+        'Type', 'Pathinfo'
+    ])
+    
+    df_clean = df_raw.rename(columns={
+        'Course':           'course',
+        'Title':            'task_name',
+        'Period':           'period',
+        'Subject':          'subject',
+        'Start DateTime':   'start_time',
+        'End DateTime':     'end_time',
+        'Time Spent (Hrs)': 'time_spent_hrs'
+    })
+
+    return df_clean
 
 class JsonConfigManager:
     def __init__(self, path: Path = Path("config.json")):

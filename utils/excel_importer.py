@@ -2,6 +2,7 @@
 from my own tools at:
 https://github.com/LoloCG/Lolos_Packages/tree/main/Data_Analysis/Excel_Tools
 '''
+from tkinter.messagebox import NO
 import pandas as pd
 import os
 from pathlib import Path
@@ -14,8 +15,8 @@ class ExcelImporter:
         files = eimp.list_folder_excel_files()
         file_df = eimp.get_df_from_file(files[0])
     '''
-    def __init__(self):
-        self.extraction_folder_dir = None
+    def __init__(self, extraction_folder_dir=None):
+        self.extraction_folder_dir = extraction_folder_dir
 
     def select_folder(self, folder_dir):
         if not os.path.exists(folder_dir):
@@ -40,6 +41,7 @@ class ExcelImporter:
     
     def get_df_from_file(self,
         filename: str | Path,
+        folder: str|Path = None,
         import_nan: bool = False,
         csv_kwargs: dict = None,
         excel_kwargs: dict = None
@@ -67,8 +69,10 @@ class ExcelImporter:
         csv_kwargs   = {} if csv_kwargs   is None else csv_kwargs
         excel_kwargs = {} if excel_kwargs is None else excel_kwargs
 
-        folder = Path(self.extraction_folder_dir)
+        if folder is None:
+            folder = Path(self.extraction_folder_dir)
         path   = folder / filename
+
         if not path.exists() or not path.is_file():
             raise FileNotFoundError(f"{path!r} does not exist or is not a file.")
 

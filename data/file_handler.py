@@ -48,6 +48,8 @@ class SPImportManager:
         if not sp_path.exists():
             log.error(f'Error, sync path does not exist ({path_str})')
         self.sp_path     = sp_path
+
+        self.project_prefixes = ["state", "project"]
     
     def get_last_update_nums(self) -> dict:
         lastModified = None 
@@ -146,10 +148,11 @@ class SPImportManager:
             lparts = len(parts)
 
             # --------------- PROJECTS --------------- #
+
             if (
                 event == "start_map"
                 and lparts == 4
-                and parts[:3] == ["mainModelData", "project", "entities"]
+                and parts[:3] == ["state", "project", "entities"]
                 and parts[3] != "INBOX_PROJECT"
             ):
                 current_proj = parts[lparts-1]
@@ -157,21 +160,23 @@ class SPImportManager:
                 proj_builder.event(event, value)
                 continue
 
-            # B) If we’re inside a project, feed every event
+            # If we’re inside a project, feed events to the builder
             if proj_builder is not None:
                 proj_builder.event(event, value)
 
-                # C) On the matching end_map, finalize
+                # On the matching end_map, finalize
                 if (
                     event == "end_map"
                     and len(parts) == 4
-                    and parts[:3] == ["mainModelData", "project", "entities"]
+                    and parts[:3] == ["state", "project", "entities"]
                 ):
                     proj = proj_builder.value
                     # prune the unwanted nested keys:
                     proj.pop("advancedCfg", None)
-                    proj.pop("theme",       None)
+                    proj.pop("theme", None)
                     proj.pop("icon", None)
+                    proj.pop("isHiddenFromMenu", None)
+                    proj.pop("isEnableBacklog", None)
 
                     projects[current_proj] = proj
 
@@ -184,17 +189,23 @@ class SPImportManager:
 
             # --------------- Current Tasks --------------- #
             # Detect start of a task object
-            # mainModelData.archiveYoung.task.entities.id
-            # mainModelData.archiveOld.task.entities.id
-            # mainModelData.task.entities.NCEaP5ZYh4lVVPUsy1BLG
+            # state.task.task.entities.id
+            # archiveYoung.archiveOld.task.entities.id
+            # archiveOld.task.entities
+            TASK_BASES = [
+                ["state", "task", "entities"],
+                ["archiveYoung", "task", "entities"],
+                ["archiveOld", "task", "entities"],
+            ]
+
             if (
                 event == "start_map"
-                and lparts >= 4
-                and parts[lparts-3:lparts-1] == ["task", "entities"]
+                and lparts == 4 
+                and any(parts[:3] == b for b in TASK_BASES)
+                # and parts[lparts-3:lparts-1] == ["task", "entities"]
             ):
-                
                 current_task = parts[lparts-1]
-                
+
                 task_builder = ObjectBuilder()
                 task_builder.event(event, value)
 
@@ -208,7 +219,6 @@ class SPImportManager:
                 continue
 
             if task_builder is not None:
-                
                 if (
                     cutoff is not None 
                     and prefix.endswith(".timeSpentOnDay") 
@@ -243,7 +253,8 @@ class SPImportManager:
     @staticmethod
     def clean_sp_tasks(tasks:dict, projects:dict, ccourse:str, cperiod:str, filter_date: date = None, cstart=None):
         def remove_child_tasks(tasks: dict[str, dict]) -> dict[str, dict]:
-            ignore_subtask_id = []
+            # ignore_subtask_id = []
+            ignore_subtask_id = set()
             parent_tasks = {}
 
             for task_id, task_dict in tasks.items():
@@ -251,7 +262,8 @@ class SPImportManager:
                 if task_id in ignore_subtask_id: continue
                 if len(task_dict["subTaskIds"]) > 0:
                     for subtask_id in task_dict["subTaskIds"]:
-                        ignore_subtask_id.append(subtask_id)
+                        # ignore_subtask_id.append(subtask_id)
+                        ignore_subtask_id.add(subtask_id)
                 
                 parent_tasks[task_id] = task_dict
 
@@ -272,7 +284,9 @@ class SPImportManager:
             proj_id = task_dict["projectId"] # fall back to pid if we don't know this project
             subject_title = proj_titles.get(proj_id, proj_id)
 
-            for time_day, time_spent in task_dict['timeSpentOnDay'].items():
+            # for time_day, time_spent in task_dict['timeSpentOnDay'].items():
+            tsod = task_dict.get("timeSpentOnDay") or {}
+            for time_day, time_spent in tsod.items():
                 day = datetime.fromisoformat(time_day).date()
 
                 if filter_date is not None and day < filter_date: 

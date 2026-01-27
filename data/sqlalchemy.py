@@ -1,4 +1,5 @@
-from sqlalchemy import create_engine
+from requests import session
+from sqlalchemy import create_engine, true
 from sqlalchemy.orm import sessionmaker
 from pathlib import Path
 from sqlalchemy.ext.declarative import declarative_base
@@ -125,6 +126,43 @@ class DBManager():
             session.close()
     '''
 
+    def get_main_data(self,
+        course:str | None = None, 
+        period:str | None = None, 
+        subject:str | None = None
+    )-> pd.DataFrame:
+        session = self.session()
+        query = session.query(MainDataTable)
+
+        if course is not None:
+            query = query.filter(MainDataTable.course == course)
+        if period is not None:
+            query = query.filter(MainDataTable.period == period)
+        if subject is not None:
+            query = query.filter(MainDataTable.subject == subject)
+
+        results = query.all()
+
+        records = [
+            {
+                "course":           row.course,
+                "period":           row.period,
+                "subject":          row.subject,
+                "task_name":        row.task_name,
+                "start_time":       row.start_time,
+                "end_time":         row.end_time,
+                "time_spent_hrs":   row.time_spent_hrs,
+                "finished":         row.finished
+            }
+            for row in results
+        ]
+        
+        df = pd.DataFrame.from_records(records)
+        df["start_time"] = pd.to_datetime(df["start_time"])
+        df["end_time"] = pd.to_datetime(df["end_time"])
+
+        return df
+
     def get_daily_data(self,
         course: str | None = None,
         period: str | None = None,
@@ -154,8 +192,6 @@ class DBManager():
             for row in results
         ]
         df = pd.DataFrame.from_records(records)
-
-        # 5) Ensure datetime dtype
         df["date"] = pd.to_datetime(df["date"])
 
         return df
@@ -203,6 +239,7 @@ class PeriodDataTable(Base):
     course          = Column(String)
     period          = Column(String)
     start_date      = Column(DateTime(timezone=True))
+    # end_date        = Column(DateTime(timezone=True), nullable=True, default=None)
     finished        = Column(Boolean, default=True)
 
 class DailyDataTable(Base):

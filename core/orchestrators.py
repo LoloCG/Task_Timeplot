@@ -76,8 +76,6 @@ class StartSequence:
             finished=False
         )
 
-# class ChartPlotter:
-
 class Orchestrators: 
     @staticmethod
     def plot_weekly_hours_bars(*_, course:str=None, period:str=None):
@@ -204,7 +202,7 @@ class Orchestrators:
         #     log.info(f"Update of young archive required ({local_young} vs {sync_headers["archiveYoung"]})")
         # if local_old < sync_headers["archiveOld"]:
         #     log.info(f"Update of old archive required ({local_old} vs {sync_headers["archiveOld"]})")
-        
+            
         last_sync_date = datetime.fromtimestamp(sync_config["last_update"]/1000, tz=timezone.utc).date()
         log.info(f"Updating to latest SP data with active tasks after {last_sync_date}.")
         tasks, projects = importer.get_sp_data(filter_date=last_sync_date)
@@ -260,16 +258,7 @@ class Orchestrators:
 
     @staticmethod
     def import_past_data(*_):
-        from data.file_handler import convert_csv_to_df
-        log.warning("Selected to import past data")
-
-        df_clean = convert_csv_to_df(n=1)
-
-        print(df_clean.tail(5))
-
-        # piv = pivot_time_by_subject_period(df_clean)
-        # print(piv)
-
+        log.error("Feature not added")
         return
 
 def pivot_time_by_subject_period(

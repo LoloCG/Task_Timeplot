@@ -15,7 +15,11 @@ class ExcelImporter:
         files = eimp.list_folder_excel_files()
         file_df = eimp.get_df_from_file(files[0])
     '''
-    def __init__(self, extraction_folder_dir=None):
+    def __init__(self, file_path:str|Path=None, extraction_folder_dir=None):
+        if file_path is not None:
+            if type(file_path) == str: self.file_path = Path(file_path)
+            else: self.file_path = file_path
+
         self.extraction_folder_dir = extraction_folder_dir
 
     def select_folder(self, folder_dir):
@@ -40,7 +44,7 @@ class ExcelImporter:
         return [f.name for f in files]
     
     def get_df_from_file(self,
-        filename: str | Path,
+        filename: str | Path = None,
         folder: str|Path = None,
         import_nan: bool = False,
         csv_kwargs: dict = None,
@@ -68,11 +72,11 @@ class ExcelImporter:
 
         csv_kwargs   = {} if csv_kwargs   is None else csv_kwargs
         excel_kwargs = {} if excel_kwargs is None else excel_kwargs
-
-        if folder is None:
-            folder = Path(self.extraction_folder_dir)
-        path   = folder / filename
-
+        
+        if self.file_path is not None: path = self.file_path
+        elif self.file_path is None: path = folder / filename
+        elif folder is None: folder = Path(self.extraction_folder_dir) 
+        print(f"path={path}")
         if not path.exists() or not path.is_file():
             raise FileNotFoundError(f"{path!r} does not exist or is not a file.")
 
@@ -115,9 +119,6 @@ class ExcelImporter:
             # maybe there is another way to do so?
             #  
         pass
-
-
-
 
     def add_sheets(self, excel_sheets): # TODO
         # add validation to check if the provided sheets actually exist in the Excel file. 

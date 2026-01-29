@@ -3,7 +3,7 @@ os.environ['KIVY_LOG_MODE'] = 'PYTHON'
 
 from core.orchestrators import Orchestrators, StartSequence, get_current_period_config
 from data.sqlalchemy import DBManager
-from data.file_handler import JsonConfigManager
+from data.config_handler import ConfigManager
 
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
@@ -97,7 +97,7 @@ class MainMenuLayout(BoxLayout):
             log.info(data)
    
         ExcludeSubjectsPopup( 
-            cnfg_mng=JsonConfigManager,
+            cnfg_mng=ConfigManager,
             db_mng=DBManager,
             on_submit=on_submit
         ).open() 

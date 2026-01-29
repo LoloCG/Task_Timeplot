@@ -1,18 +1,40 @@
 from matplotlib.pylab import f
 from utils.logger import LoggerSingleton
-from data.file_handler import JsonConfigManager, SPImportManager, stream_json_file
+from data.file_handler import *
+from data.importers.astdl_importer import AbstractSpoonTDLImporter
 
 from pandas import DataFrame
 
 
 def main():
-    from data.sync_importers import AbstractSpoonTDLImporter
+    log.debug("start test")
+    from core.orchestrators import StartSequence
 
+    load=StartSequence.start_sequence()
+    log.debug(f"payload from start sequence={load}")
+
+def importpast():
     csv_path = r"C:\Users\Lolo\Desktop\programming\local_repo\Task_Timeplot\past_data\1ero Farmacia Tasklist_Log.csv"
-
-    df = AbstractSpoonTDLImporter.csv_to_df(csv_path)
     
+    course_config = select_course_config(1,csv_path)
+
+    df = AbstractSpoonTDLImporter.csv_to_df(csv_path, raw=False, csv_config_dict=course_config)
     log.debug(df)
+
+def select_course_config(num, csv_path):
+    import json, os
+    json_config_path=r"past_data\past_courses_csv_data.json"
+    
+    course_config = None
+    with open(json_config_path) as json_file: 
+        course_config = json.load(json_file)[num-1]
+        csv_name = course_config["csv_filename"]
+        log.info(f"Imported json config in {json_config_path} for {csv_name}")
+    
+    return course_config
+    
+    base_filename = os.path.splitext(csv_path)[0].strip()
+
 
 logger_instance = LoggerSingleton()
 logger_instance.set_logger_config(level='DEBUG')

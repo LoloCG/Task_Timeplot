@@ -1,24 +1,119 @@
 from datetime import datetime, timezone,  timedelta
+from warnings import deprecated
 # from sqlite3 import Date
 # from sys import exception
 # from tracemalloc import start
 
 from pandas import DataFrame
+from sqlalchemy import true
 from data.sqlalchemy import DBManager
-from data.file_handler import *
+from data.file_handler import SPImportManager, Path, DFTransformers, pd
+from data.config_handler import ConfigManager
 from core.charts import Charts
 
 from utils.logger import LoggerSingleton
 log = LoggerSingleton().get_logger()
 
-SP_FILE = Path(r"C:\Users\Lolo\Nextcloud\Super Productivity\__meta_")
+SP_FILE = Path(r"C:\Users\Lolo\Nextcloud\Super Productivity\sync-data.json")
 
 class StartSequence:
     @staticmethod
+    def start_sequence():
+        config_mng = ConfigManager()
+        c_status = config_mng.inspect()
+
+        # TODO: add recovery/migrate if exists but invalid
+        log.debug(f"config status: exists={c_status.exists}, valid={c_status.valid}")
+        if c_status.data == None or c_status.exists == False:
+            config_mng.generate_new(sync_file_path=SP_FILE) # FIXME: at the moment whole code assumes hardcoded syncpath
+            c_status = config_mng.inspect()
+        if not c_status.valid:
+            raise RuntimeError("Config exists but is invalid JSON.")
+        
+        db_mngr = DBManager()
+        db_status = db_mngr.inspect_status()
+        log.debug(f"db status={db_status}")
+        if not db_status.can_connect: raise RuntimeError(f"ERROR: cannot connect to database.")
+        if not db_status.exists or not db_status.tables_ok:
+            log.debug(f"Generating db tables")
+            db_mngr.createTables()
+
+
+        mode = "NORMAL"
+        current_period_req = False
+        sync_path_req = True
+        if c_status.data["sync_data"]["sync_file_path"]: sync_path_req = False
+
+        if not db_status.has_data:
+            log.debug(f"No data in db.")
+            if StartSequence.config_cperiod_has_data(c_status.data) and not sync_path_req:
+                log.debug(f"Using config data to import from sync source")
+                StartSequence.first_import_from_config(
+                    cfg_data=c_status.data,
+                    cfg_mngr=config_mng,
+                    db_mngr=db_mngr
+                )
+                mode = "IMPORTED"
+
+            else: 
+                log.debug(f"Cannot import without period data in config")
+                mode = "FIRST_RUN"
+                current_period_req = True
+        
+        return {
+            "mode": mode,
+            "ask_sync_path": sync_path_req,
+            "ask_current_period": current_period_req
+        }
+    
+    @staticmethod
+    def first_import_from_config(cfg_data, cfg_mngr:ConfigManager, db_mngr:DBManager):
+        '''
+        Assumes all necessary data required to import from superproductivity app is already present in config.
+        Also updates config file with last update numbers. 
+        '''
+        cperiod_data = cfg_data["current_period_data"]
+        sync_source = cfg_data["sync_data"]["sync_file_path"]
+
+        importer = SPImportManager(path_str=sync_source)
+        tasks, projects = importer.get_sp_data(filter_date=sync_source.get("period_start_date", None))
+        flat_tasks = importer.clean_sp_tasks(
+            tasks=tasks,
+            projects=projects, 
+            ccourse=cperiod_data["current_course"], 
+            cperiod=cperiod_data["current_period"]
+        )
+        df = importer.convert_tasks_to_df(flat_tasks, cstart=None)
+
+        db_mngr.upsert_to_tables(table='main', df=df)
+        daily_df = DFTransformers.basic_to_daily_clean(df)
+        db_mngr.upsert_to_tables(table='daily', df=daily_df)
+
+
+        sync_headers = importer.get_last_update_nums()
+        data = {
+            "sync_data": {
+                "last_update": int(sync_headers["lastUpdate"]),
+                "archive_young": int(sync_headers["archiveYoung"]),
+                "archive_old": int(sync_headers["archiveOld"]),
+                "update_date": int(datetime.now(timezone.utc).timestamp() * 1000),
+            }
+        }
+        cfg_mngr.json_upsert(data)
+
+    @staticmethod
+    def config_cperiod_has_data(cfg_data:dict)->bool:
+        cperiod_data = cfg_data["current_period_data"]
+        if any(value is None for value in cperiod_data.values()):
+            return False
+        return True 
+
+    @staticmethod
+    @deprecated("To be replaced with new start sequence...")
     def check_local_data_exists() -> bool:
         DBManager().createTables()
 
-        config_mng = JsonConfigManager()
+        config_mng = ConfigManager()
         config = config_mng.load_json_config()
         
         if config == {}:
@@ -30,6 +125,7 @@ class StartSequence:
         return True
 
     @staticmethod
+    @deprecated("To be replaced with new start sequence...")
     def generate_from_start(ccourse:str, cperiod:str, period_start):
         log.debug(f"Sync file path set in:\n\t{str(SP_FILE)}")
 
@@ -58,7 +154,7 @@ class StartSequence:
                 "last_update":sync_headers["lastUpdate"],
                 "archive_young":sync_headers["archiveYoung"],
                 "archive_old":sync_headers["archiveOld"],
-                "update_date":str(datetime.now(timezone.utc)),
+                "update_date":datetime.now(timezone.utc),
             },
             "current_period_data":{
                 "current_course":ccourse,
@@ -66,7 +162,7 @@ class StartSequence:
                 "period_start_date":period_start
             }
         }
-        JsonConfigManager().save_dict_to_config(data)
+        ConfigManager().save_dict_to_config(data)
         log.debug(f"saving config:\n{data}")
 
         DBManager().insert_period_data(
@@ -175,7 +271,7 @@ class Orchestrators:
 
     @staticmethod
     def check_sp_sync():
-        config_mng = JsonConfigManager()
+        config_mng = ConfigManager()
         config = config_mng.load_json_config()
 
         sync_config = config["sync_data"]
@@ -223,12 +319,12 @@ class Orchestrators:
         # json_upsert does a shallow update of data. So data specific to config is updated here instead.        
         sync_config["last_update"] = sync_headers["lastUpdate"]
         sync_config["update_date"] = str(datetime.now(timezone.utc))
-        JsonConfigManager().json_upsert({"sync_data": sync_config})
+        ConfigManager().json_upsert({"sync_data": sync_config})
 
     @staticmethod
     def get_basic_stats(*_) -> dict:
         log.debug(f"Getting basic stats")
-        config = JsonConfigManager().load_json_config()
+        config = ConfigManager().load_json_config()
         config_sync = config["sync_data"]
         last_dt_sync = datetime.fromisoformat(config_sync['update_date'])
 
@@ -343,7 +439,7 @@ def _week_bounds(
     return wk_start, wk_end_inclusive
 
 def get_current_period_config()-> dict:
-    return JsonConfigManager().load_json_config()["current_period_data"]
+    return ConfigManager().load_json_config()["current_period_data"]
 
 def filter_df_excluded(
     df:pd.DataFrame,
@@ -351,7 +447,7 @@ def filter_df_excluded(
     ) -> DataFrame:
 
     if excluded_list is None:
-        excluded_list = JsonConfigManager().load_json_config().get("current_period_data", {}).get("default_exclude", None)
+        excluded_list = ConfigManager().load_json_config().get("current_period_data", {}).get("default_exclude", None)
         if excluded_list is None: return df
     
     log.debug(f"Filtering df to exclude {excluded_list}")

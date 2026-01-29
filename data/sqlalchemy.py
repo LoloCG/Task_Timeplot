@@ -1,24 +1,67 @@
-from requests import session
-from sqlalchemy import create_engine, true
-from sqlalchemy.orm import sessionmaker
+# from requests import session
 from pathlib import Path
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, Integer, String, DateTime, Float, Boolean
 import pandas as pd
+from dataclasses import dataclass
+
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Column, Integer, String, DateTime, Float, Boolean, inspect, text, create_engine, true
+
 
 from utils.logger import LoggerSingleton
 log = LoggerSingleton().get_logger()
 
 Base = declarative_base()
 
-class DBManager():
-    def __init__(self):
-        db_name = 'studyanalytics.db'
-        db_path = Path(__file__).resolve().parent.parent
-        
-        self.engine = create_engine(f"sqlite:///{db_path}/{db_name}", echo=False)
+@dataclass
+class DBStatus:
+    exists: bool
+    can_connect: bool
+    tables_ok: bool
+    # missing_tables: list[str]
+    has_data: bool | None  
 
+class DBManager():
+    def __init__(
+            self, 
+            db_name="studyanalytics.db", 
+            db_path:str|Path=Path(__file__).resolve().parent.parent
+        ):
+        self.db_file = db_path / db_name
+        self.engine = create_engine(f"sqlite:///{db_path}/{db_name}", echo=False)
         self.session = sessionmaker(bind=self.engine)
+
+    def inspect_status(self)->DBStatus:
+        exists = self.db_file.exists()
+        
+        try:
+            insp = inspect(self.engine)
+            tables = set(insp.get_table_names())
+            
+            has_tables = False
+            if len(tables) > 0: has_tables = True
+
+            has_data = False
+            if has_tables == True:
+                with self.engine.connect() as conn:
+                    n = conn.execute(text("SELECT 1 FROM main_data LIMIT 1")).fetchone()
+                    has_data = (n is not None)
+    
+            return DBStatus(
+                exists=exists,
+                can_connect=True,
+                tables_ok=has_tables,
+                has_data=has_data
+            )
+        
+        except SQLAlchemyError:
+            return DBStatus(
+                exists=exists,
+                can_connect=False,
+                tables_ok=False,
+                has_data=None
+            )
         
     def createTables(self):
         log.debug("Starting database")

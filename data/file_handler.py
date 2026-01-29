@@ -316,91 +316,16 @@ class SPImportManager:
     def convert_tasks_to_df(tasks_list: list[dict], cstart=None) -> pd.DataFrame:
         if cstart != None:
             log.warning(f"Current start feature not yet added.")
+        
 
         df = pd.DataFrame(tasks_list)
+        if len(df) == 0:
+            log.warning(f"task list empty")
+            return None
+
         df["start_time"] = pd.to_datetime(df["start_time"])
         df["end_time"]   = pd.to_datetime(df["end_time"],
                                 format="ISO8601",
                                 errors="raise")
         return df
 
-class JsonConfigManager:
-    def __init__(self, path: Path = Path("config.json")):
-        self.path = path
-
-    def save_dict_to_config(self, data, path=None):
-        if not path: path = self.path
-        log.info(f"Saving data to {path}")
-
-        with open(path, 'w') as json_file:
-            json.dump(data, json_file, indent=2)
-
-    def load_json_config(self) -> dict:
-        """
-        Read and return the JSON config, or {} if the file doesn't exist.
-        """
-        try:
-            with open(self.path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except FileNotFoundError:
-            return {}
-
-    def json_upsert(self, new_data, ):
-        cfg_file = Path(self.path)
-        if cfg_file.exists():
-            with open(cfg_file, 'r') as file:
-                try:
-                    config = json.load(file)
-                except json.JSONDecodeError:
-                    config = {}
-        else:
-            config = {}
-
-        config.update(new_data)
-
-        with open(cfg_file, 'w') as file:
-            json.dump(config, file, indent=4)
-
-        return config
-
-    def change_exclude_list(self, subjects: str | list[str]) -> dict:
-        cfg_file = Path(self.path)
-
-        if cfg_file.exists():
-            with open(cfg_file, 'r', encoding='utf-8') as file:
-                try:
-                    config = json.load(file)
-                except json.JSONDecodeError:
-                    config = {}
-        else:
-            config = {}
-
-        current_period_data = config.get('current_period_data')
-        if not isinstance(current_period_data, dict):
-            current_period_data = {}
-            config['current_period_data'] = current_period_data
-
-        # Normalize the input into a clean list[str]
-        if isinstance(subjects, str):
-            raw_items = subjects.split(',')
-        elif isinstance(subjects, list):
-            raw_items = subjects
-        else:
-            log.error(f"subjects to be added to exclude list shown as empty: ${subjects}")
-            raw_items = []
-
-        # Trim, drop empties, and deduplicate while preserving order
-        seen = set()
-        normalized: list[str] = []
-        for item in raw_items:
-            name = (item or "").strip()
-            if name and name not in seen:
-                seen.add(name)
-                normalized.append(name)
-
-        current_period_data['default_exclude'] = normalized  
-
-        with open(cfg_file, 'w', encoding='utf-8') as file:
-            json.dump(config, file, indent=2, ensure_ascii=False)
-
-        return config

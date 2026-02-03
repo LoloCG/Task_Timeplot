@@ -61,8 +61,8 @@ class ExcelImporter:
         Any kwargs you pass in csv_kwargs / excel_kwargs will override the defaults.
         """
         def get_from_csv():
-            defaults = {'encoding': 'utf-16', 'delimiter': '\t', 'skiprows': 1}
-            df = pd.read_csv(path, **{**defaults, **csv_kwargs})
+            defaults = {"encoding": "utf-8"}
+            df = pd.read_csv(path, **(defaults | csv_kwargs))
 
             if not import_nan:
                 df = df.loc[:, df.columns.notnull()]

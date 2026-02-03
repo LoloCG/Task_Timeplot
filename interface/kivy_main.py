@@ -1,7 +1,7 @@
 import os
 os.environ['KIVY_LOG_MODE'] = 'PYTHON'
 
-from core.orchestrators import Orchestrators, StartSequence, get_current_period_config
+from core.orchestrators import Orchestrators, StartSequence
 from data.sqlalchemy import DBManager
 from data.config_handler import ConfigManager
 
@@ -57,10 +57,6 @@ class MainMenuLayout(BoxLayout):
         Window.clearcolor = (0.1, 0.1, 0.1, 1)
                 
         self.add_widget(self.display_options())
-
-    def on_kv_post(self, base_widget):
-        if StartSequence.check_local_data_exists():
-            self.ids.stats_panel.refresh()
 
     def sync_and_refresh(self):
         Orchestrators.check_sp_sync()
@@ -183,16 +179,27 @@ class MainWindows(App):
         return MainMenuLayout()
 
     def on_start(self):
-        if not StartSequence.check_local_data_exists():
+        start_dict = StartSequence.start_sequence()
+        log.debug(f"on_start payload = {start_dict}")
+        
+        if start_dict["ask_current_period"]:
+            log.debug(f"Asking for current period data")
             def on_submit(data: dict):
                 StartSequence.generate_from_start(
                     ccourse=data["course_name"],
                     cperiod=data["period_name"],
                     period_start=data["start_date"],
                 )
-                # refresh after bootstrap
-                if self.root and "stats_panel" in self.root.ids:
-                    self.root.ids.stats_panel.refresh()
-                    return MainMenuLayout
+                # # refresh after bootstrap
+                # if self.root and "stats_panel" in self.root.ids:
+                #     self.root.ids.stats_panel.refresh()
+                #     return MainMenuLayout
 
             AddPeriodPopup(on_submit=on_submit).open()
+        
+        else:
+            self.root.ids.stats_panel.refresh()
+            log.debug(f"returning to MainMenuLayout")
+            return MainMenuLayout
+            
+

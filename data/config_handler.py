@@ -18,6 +18,7 @@ class ConfigManager:
         self.path = path
 
     def inspect(self)->ConfigStatus:
+        log.debug(f"inspecting config file.")
         if not self.path.exists():
             return ConfigStatus(
                 exists=False,

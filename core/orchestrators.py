@@ -67,16 +67,21 @@ class StartSequence:
         }
     
     @staticmethod
-    def first_import_from_config(cfg_data, cfg_mngr:ConfigManager, db_mngr:DBManager):
+    def first_import_from_config(cfg_data, cfg_mngr:ConfigManager=ConfigManager(), db_mngr:DBManager=DBManager()):
         '''
         Assumes all necessary data required to import from superproductivity app is already present in config.
         Also updates config file with last update numbers. 
         '''
         cperiod_data = cfg_data["current_period_data"]
         sync_source = cfg_data["sync_data"]["sync_file_path"]
+        
+        # FIXME: this will fail with an empty date...
+        period_start = datetime.strptime(cperiod_data["period_start_date"], '%d-%m-%Y').date()
+        
+        # log.debug(f"in first_import_from_config, period start set as={period_start}")
 
         importer = SPImportManager(path_str=sync_source)
-        tasks, projects = importer.get_sp_data(filter_date=sync_source.get("period_start_date", None))
+        tasks, projects = importer.get_sp_data(filter_date=period_start)
         flat_tasks = importer.clean_sp_tasks(
             tasks=tasks,
             projects=projects, 
@@ -89,13 +94,20 @@ class StartSequence:
         daily_df = DFTransformers.basic_to_daily_clean(df)
         db_mngr.upsert_to_tables(table='daily', df=daily_df)
 
+        db_mngr.insert_period_data(
+            course=cperiod_data["current_course"],
+            period=cperiod_data["current_period"],
+            start_date=period_start,
+            finished=False
+        )
 
+        
         sync_headers = importer.get_last_update_nums()
         data = {
             "sync_data": {
-                "last_update": int(sync_headers["lastUpdate"]),
-                "archive_young": int(sync_headers["archiveYoung"]),
-                "archive_old": int(sync_headers["archiveOld"]),
+                "last_update": sync_headers["lastUpdate"],
+                "archive_young": sync_headers["archiveYoung"],
+                "archive_old": sync_headers["archiveOld"],
                 "update_date": int(datetime.now(timezone.utc).timestamp() * 1000),
             }
         }
@@ -252,7 +264,7 @@ class Orchestrators:
         db.insert_period_data(
             course=ccourse, 
             period=cperiod, 
-            start_date= datetime.strptime(cstart, '%d-%m-%Y'), 
+            start_date=datetime.strptime(cstart, '%d-%m-%Y'), 
             finished = False
         )
 
@@ -318,7 +330,10 @@ class Orchestrators:
 
         # json_upsert does a shallow update of data. So data specific to config is updated here instead.        
         sync_config["last_update"] = sync_headers["lastUpdate"]
-        sync_config["update_date"] = str(datetime.now(timezone.utc))
+        sync_config["update_date"] = int(
+            datetime.now(timezone.utc).timestamp() * 1000
+        )
+        log.debug(f"Upserting config with {sync_config}")
         ConfigManager().json_upsert({"sync_data": sync_config})
 
     @staticmethod
@@ -326,7 +341,11 @@ class Orchestrators:
         log.debug(f"Getting basic stats")
         config = ConfigManager().load_json_config()
         config_sync = config["sync_data"]
-        last_dt_sync = datetime.fromisoformat(config_sync['update_date'])
+        # last_dt_sync = config_sync['update_date']
+  
+        last_dt_sync = datetime.fromtimestamp(
+            config_sync['update_date'] / 1000, 
+            tz=timezone.utc).strftime("%Y-%m-%d %H:%M")
 
         df = DBManager().get_daily_data()
         df = filter_df_excluded(df, config.get("current_period_data", {}).get("default_exclude", None))
@@ -337,7 +356,6 @@ class Orchestrators:
         total_hours_last_day = df.loc[df['date'] == last_db_day, 'time_spent_hrs'].sum()
         
         week_df = get_week_df(df)
-        # log.debug(f"Week data:\n{week_df}")
 
         total_week_hours = week_df['time_spent_hrs'].sum()
                 
@@ -345,8 +363,8 @@ class Orchestrators:
         avg_week_daily = total_week_hours / days_elapsed
 
         return {
-            "last_sync":last_dt_sync.date(),
-            "last_db_day": last_db_day.date(),
+            "last_sync":last_dt_sync,
+            "last_db_day": last_db_day,
             "last_db_hrs":total_hours_last_day,
             'avg_week_daily':avg_week_daily,
             'total_week_hours':total_week_hours

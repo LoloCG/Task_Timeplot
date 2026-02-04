@@ -68,7 +68,7 @@ class MainMenuLayout(BoxLayout):
             "Display Period Hours (bars)": Orchestrators.plot_daily_hours_bars,
             "Display Weekly Hours (bars)": Orchestrators.plot_weekly_hours_bars,
             "Display total Period Hours": Orchestrators.plot_total_horus_bars,
-            "Display week average (Line)": Orchestrators.plot_week_avg_line,
+            "Display week average (Line)": Orchestrators.plot_week_avg_line_compared,
             "test":Orchestrators.import_past_data,
         }
         

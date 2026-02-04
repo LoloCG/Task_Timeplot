@@ -250,3 +250,106 @@ class Charts:
         plt.tight_layout()
         plt.show()
         return
+  
+    @classmethod
+    def plot_rolling_7d_average_compared(cls, 
+        df, window=7, 
+        course_highlight:str=None, 
+        period_highlight:str=None
+    ):
+        """
+        Line chart of rolling N-day average (default 7) of *daily total* study hours.
+        One point per day (continuous dates), including 0 for days with no study.
+        """
+
+        df = df.copy()
+        df['date'] = pd.to_datetime(df['date'])
+        
+        groups = []
+        for (course, period), g in df.groupby(["course", "period"], sort=True):
+            if g.empty:
+                continue
+            log.debug(f"Computing series for {course} - {period}")
+            
+            daily = (
+                g.groupby("date")["time_spent_hrs"]
+                .sum()
+                .sort_index()
+            )
+
+            # force continuous days, filling with 0
+            full_index = pd.date_range(
+                start=daily.index.min(),
+                end=daily.index.max(),
+                freq="D"
+            )
+            daily = daily.reindex(full_index, fill_value=0.0)
+            
+            rolling = daily.rolling(window=window, min_periods=1).mean()
+
+            day_idx = (rolling.index - rolling.index[0]).days
+
+            groups.append({
+                "course": course,
+                "period": period,
+                "x": day_idx,
+                "y": rolling.values,
+            })
+
+    
+        plt.style.use(CHART_THEME)
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.set_axisbelow(True)
+        ax.grid(True, which='major', axis='y', ls='-')
+
+        # highlight_key = (course_highlight, period_highlight)
+        highlight_key = (
+            (course_highlight, period_highlight)
+            if course_highlight is not None and period_highlight is not None
+            else None
+        )
+        
+        for s in groups:
+            key = (s["course"], s["period"])
+            # if key == highlight_key:
+            if highlight_key is not None and key == highlight_key:
+                continue
+            ax.plot(
+                s["x"],
+                s["y"],
+                alpha=0.3,          # lowered opacity
+                linewidth=1.2,
+                label=f"{s["course"]} — {s["period"]}"
+            )
+
+        if highlight_key is not None:
+            highlight = next(
+                (s for s in groups if (s["course"], s["period"]) == highlight_key),
+                None,
+            )
+            if highlight is not None:
+                ax.plot(
+                    highlight["x"],
+                    highlight["y"],
+                    alpha=0.95,
+                    linewidth=2.4,
+                    # label=f"{course_highlight} — {period_highlight} ({window}-day rolling avg)",
+                    label=f"{course_highlight} — {period_highlight}"
+                )
+
+
+        ax.set_xlabel("Day (since start of period)")
+        ax.set_ylabel(f"{window}-day rolling average (hours)")
+
+        # X limits across all series (comparable timeline)
+        x_min = min(int(min(s["x"])) for s in groups if len(s["x"]) > 0)
+        x_max = max(int(max(s["x"])) for s in groups if len(s["x"]) > 0)
+        ax.set_xlim(x_min, x_max)
+        ax.set_ylim(bottom=0)
+
+        ax.legend(loc="upper left", frameon=True)
+        # if highlight_key is not None:
+            # ax.legend(loc="upper left", frameon=True)
+
+        plt.tight_layout()
+        plt.show()

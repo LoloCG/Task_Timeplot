@@ -250,6 +250,21 @@ class Orchestrators:
         return None
 
     @staticmethod
+    def plot_week_avg_line_compared(*_, course:str=None, period:str=None):
+        if course is None or period is None: 
+            config = get_current_period_config()
+            course=config["current_course"]
+            period=config["current_period"]
+
+        log.debug(f"Plotting general 7 day average data")
+        df = DBManager().get_daily_data()
+        df = filter_df_excluded(df)
+        df = add_start_date_df(df)
+
+        Charts.plot_rolling_7d_average_compared(df=df,  course_highlight=course, period_highlight=period, window=7) # ,
+        return None
+    
+    @staticmethod
     def insert_df_to_db(df, ccourse, cperiod, cstart):
         db = DBManager()
         db.insert_to_main_data(df=df)

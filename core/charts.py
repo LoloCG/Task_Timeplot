@@ -254,8 +254,8 @@ class Charts:
     @classmethod
     def plot_rolling_7d_average_compared(cls, 
         df, window=7, 
-        course_highlight:str=None, 
-        period_highlight:str=None
+        course_highlight:str|None =None, 
+        period_highlight:str|None =None
     ):
         """
         Line chart of rolling N-day average (default 7) of *daily total* study hours.
@@ -269,13 +269,15 @@ class Charts:
         for (course, period), g in df.groupby(["course", "period"], sort=True):
             if g.empty:
                 continue
-            log.debug(f"Computing series for {course} - {period}")
+            # log.debug(f"Computing series for {course} - {period}")
             
             daily = (
                 g.groupby("date")["time_spent_hrs"]
                 .sum()
                 .sort_index()
             )
+
+            # log.debug(f"earliest in series={g['date'].min()}")
 
             # force continuous days, filling with 0
             full_index = pd.date_range(
@@ -301,40 +303,53 @@ class Charts:
         fig, ax = plt.subplots(figsize=(8, 4))
         ax.set_axisbelow(True)
         ax.grid(True, which='major', axis='y', ls='-')
+        
 
-        # highlight_key = (course_highlight, period_highlight)
+        highlight_course = course_highlight if course_highlight is not None else None
         highlight_key = (
             (course_highlight, period_highlight)
             if course_highlight is not None and period_highlight is not None
             else None
         )
-        
+
         for s in groups:
             key = (s["course"], s["period"])
-            # if key == highlight_key:
+
+            # If we are highlighting a course, skip plotting it here; we will plot it in the highlight section
+            if highlight_course is not None and s["course"] == highlight_course:
+                continue
+
+            # If we are highlighting a specific (course, period), skip it here; plot later with emphasis
             if highlight_key is not None and key == highlight_key:
                 continue
+
             ax.plot(
                 s["x"],
                 s["y"],
-                alpha=0.3,          # lowered opacity
-                linewidth=1.2,
-                label=f"{s["course"]} — {s["period"]}"
+                alpha=0.35,
+                linewidth=1.1,
+                linestyle="--",  # dashed for non-highlight courses ("past courses")
+                label=f"{s['course']} — {s['period']}",
             )
 
-        if highlight_key is not None:
-            highlight = next(
-                (s for s in groups if (s["course"], s["period"]) == highlight_key),
-                None,
-            )
-            if highlight is not None:
+
+        if highlight_course is not None:
+            # Plot ALL periods for the highlighted course (solid)
+            for s in (g for g in groups if g["course"] == highlight_course):
+                key = (s["course"], s["period"])
+                
+                log.debug(f"Highlighted df:\n{g}\n{s['y']}")
+                
+                # If a specific period is provided, make that one extra prominent
+                is_primary = (highlight_key is not None and key == highlight_key)
+
                 ax.plot(
-                    highlight["x"],
-                    highlight["y"],
-                    alpha=0.95,
-                    linewidth=2.4,
-                    # label=f"{course_highlight} — {period_highlight} ({window}-day rolling avg)",
-                    label=f"{course_highlight} — {period_highlight}"
+                    s["x"],
+                    s["y"],
+                    alpha=0.95 if is_primary else 0.75,
+                    linewidth=2.4 if is_primary else 1.9,
+                    linestyle="-",
+                    label=f"{s['course']} — {s['period']}",
                 )
 
 
@@ -347,7 +362,15 @@ class Charts:
         ax.set_xlim(x_min, x_max)
         ax.set_ylim(bottom=0)
 
-        ax.legend(loc="upper left", frameon=True)
+        ax.legend(
+            loc="upper left",
+            frameon=True,
+            fontsize="x-small",
+            handlelength=1.2,
+            borderpad=0.25,
+            labelspacing=0.25,
+        )
+        
         # if highlight_key is not None:
             # ax.legend(loc="upper left", frameon=True)
 

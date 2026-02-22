@@ -1,9 +1,6 @@
-from datetime import datetime, timezone,  timedelta
+from datetime import datetime, timezone
 from warnings import deprecated
-# from sqlite3 import Date
-# from sys import exception
-# from tracemalloc import start
-
+from numpy import full
 from pandas import DataFrame
 from sqlalchemy import true
 from data.sqlalchemy import DBManager
@@ -69,7 +66,8 @@ class StartSequence:
     @staticmethod
     def first_import_from_config(cfg_data, cfg_mngr:ConfigManager=ConfigManager(), db_mngr:DBManager=DBManager()):
         '''
-        Assumes all necessary data required to import from superproductivity app is already present in config.
+        ! - Assumes all necessary data required to import from superproductivity app is already present in config 
+            (sync_file_path, period_start_date, current_course, current_period).
         Also updates config file with last update numbers. 
         '''
         cperiod_data = cfg_data["current_period_data"]
@@ -78,8 +76,6 @@ class StartSequence:
         # FIXME: this will fail with an empty date...
         period_start = datetime.strptime(cperiod_data["period_start_date"], '%d-%m-%Y').date()
         
-        # log.debug(f"in first_import_from_config, period start set as={period_start}")
-
         importer = SPImportManager(path_str=sync_source)
         tasks, projects = importer.get_sp_data(filter_date=period_start)
         flat_tasks = importer.clean_sp_tasks(
@@ -91,16 +87,16 @@ class StartSequence:
         df = importer.convert_tasks_to_df(flat_tasks, cstart=None)
 
         db_mngr.upsert_to_tables(table='main', df=df)
-        daily_df = DFTransformers.basic_to_daily_clean(df)
+        daily_df = DFTransformers.basic_to_daily_clean_new(df)
         db_mngr.upsert_to_tables(table='daily', df=daily_df)
 
         db_mngr.insert_period_data(
             course=cperiod_data["current_course"],
             period=cperiod_data["current_period"],
             start_date=period_start,
-            finished=False
+            finished=False,
+            auto_exclude=cperiod_data['default_exclude']
         )
-
         
         sync_headers = importer.get_last_update_nums()
         data = {
@@ -120,87 +116,31 @@ class StartSequence:
             return False
         return True 
 
-    @staticmethod
-    @deprecated("To be replaced with new start sequence...")
-    def check_local_data_exists() -> bool:
-        DBManager().createTables()
-
-        config_mng = ConfigManager()
-        config = config_mng.load_json_config()
-        
-        if config == {}:
-            log.info("Config file does not exist.")
-            return False
-
-        else:
-            Orchestrators.check_sp_sync()
-        return True
-
-    @staticmethod
-    @deprecated("To be replaced with new start sequence...")
-    def generate_from_start(ccourse:str, cperiod:str, period_start):
-        log.debug(f"Sync file path set in:\n\t{str(SP_FILE)}")
-
-        log.info(f'Importing all data for SP Course '
-            f'{ccourse} - {cperiod} '
-            f'starting on {period_start}')
-
-        importer = SPImportManager(
-            path_str=str(SP_FILE), 
-        )
-        tasks, projects = importer.get_sp_data()
-        flat_tasks = importer.clean_sp_tasks(
-            tasks=tasks,
-            projects=projects, 
-            ccourse=ccourse, 
-            cperiod=cperiod
-        )
-        df = importer.convert_tasks_to_df(flat_tasks, cstart=None)
-        Orchestrators.upsert_df_to_db(df)
-
-        sync_headers = importer.get_last_update_nums()
-
-        data={
-            "sync_data":{
-                "sync_file_path":str(SP_FILE),
-                "last_update":sync_headers["lastUpdate"],
-                "archive_young":sync_headers["archiveYoung"],
-                "archive_old":sync_headers["archiveOld"],
-                "update_date":datetime.now(timezone.utc),
-            },
-            "current_period_data":{
-                "current_course":ccourse,
-                "current_period":cperiod,
-                "period_start_date":period_start
-            }
-        }
-        ConfigManager().save_dict_to_config(data)
-        log.debug(f"saving config:\n{data}")
-
-        DBManager().insert_period_data(
-            course=ccourse,
-            period=cperiod,
-            start_date=datetime.strptime(period_start, '%d-%m-%Y').date(),
-            finished=False
-        )
-
 class Orchestrators: 
     @staticmethod
     def plot_weekly_hours_bars(*_, course:str=None, period:str=None):
         # TODO: Will use daily data for the time being until weekly data is added to db.
 
+        excluded = []
+        start_date = None
         if course or period is None: 
-            config = get_current_period_config()
-            course=config["current_course"]
-            period=config["current_period"]
+            config      = get_current_period_config()
+            course      = config["current_course"]
+            period      = config["current_period"]
+            excluded    = config['default_exclude']
+            start_date  = config['period_start_date']
 
         log.debug(f"Plotting weekly data for {course}, {period}")
         df = DBManager().get_daily_data(course, period)
-        df = filter_df_excluded(df)
-        df = add_start_date_df(df)
+        df = filter_df_excluded(df, excluded_list=excluded)
+
+        # df = add_start_date_df(df)
+        df = fill_daily_missing_dates(
+            daily_df=df,
+            start_date=start_date
+        )
 
         weekly_df = DFTransformers.temp_daily_to_weekly_clean(df)
-        # log.debug(f"Weekly df tail:\n{weekly_df.tail()}")
 
         Charts.plot_weekly_stack_bar(weekly_df)
         return
@@ -213,41 +153,37 @@ class Orchestrators:
             period=config["current_period"]
 
         log.debug(f"Plotting daily data for {course}, {period}")
-        df = DBManager().get_daily_data(course, period)
-        df = filter_df_excluded(df)
+        db_mngr = DBManager()
         
-        full_df = add_start_date_df(df)
+        df = db_mngr.get_daily_data(course, period)
+        period_data  = db_mngr.get_period_data(course, period)
 
-        Charts.plot_daily_stack_bar(full_df)
+        df = filter_df_excluded(df, excluded_list=period_data['auto_exclude'])
+        
+        # log.debug(f"period data start date={period_data['start_date']}")
+        df = fill_daily_missing_dates(
+            daily_df=df,
+            start_date=period_data['start_date']
+        )
+
+        log.debug(f"full_df:\n{df}")
+        Charts.plot_daily_stack_bar(df)
     
     @staticmethod
     def plot_total_horus_bars(*_, course:str=None, period:str=None):
-
+        
+        excluded = []
         if course or period is None: 
-            config = get_current_period_config()
-            course=config["current_course"]
-            period=config["current_period"]
+            config      = get_current_period_config()
+            course      = config["current_course"]
+            period      = config["current_period"]
+            excluded    = config['default_exclude']
 
         log.debug(f"Plotting total hours data for {course}, {period}")
         df = DBManager().get_daily_data(course, period)
-        df = filter_df_excluded(df)
+        df = filter_df_excluded(df, excluded_list=excluded)
 
         Charts.plot_total_period_hours_bars(df)
-
-    @staticmethod
-    def plot_week_avg_line(*_, course:str=None, period:str=None):
-        if course or period is None: 
-            config = get_current_period_config()
-            course=config["current_course"]
-            period=config["current_period"]
-
-        log.debug(f"Plotting 7 day average data for {course}, {period}")
-        df = DBManager().get_daily_data(course, period)
-        df = filter_df_excluded(df)
-        df = add_start_date_df(df)
-
-        Charts.plot_rolling_7d_average(df=df, window=7)
-        return None
 
     @staticmethod
     def plot_week_avg_line_compared(*_, course:str=None, period:str=None):
@@ -257,11 +193,35 @@ class Orchestrators:
             period=config["current_period"]
 
         log.debug(f"Plotting general 7 day average data")
-        df = DBManager().get_daily_data()
-        df = filter_df_excluded(df)
-        df = add_start_date_df(df)
 
-        Charts.plot_rolling_7d_average_compared(df=df,  course_highlight=course, period_highlight=period, window=7) # ,
+        db_mngr = DBManager()
+        df = db_mngr.get_daily_data()
+
+        filtered_groups = []
+        for (course_i, period_i), g in df.groupby(['course', 'period']):
+            # log.debug(f"in loop: {course_i}, {period_i}")
+            period_data  = db_mngr.get_period_data(course_i, period_i)
+                        
+            g = filter_df_excluded(g, excluded_list=period_data['auto_exclude'])
+
+            period_df = fill_daily_missing_dates(
+                daily_df=g,
+                start_date=period_data['start_date']
+            )
+
+            period_df = period_df.groupby(['course', 'period', 'date'], as_index=False)['time_spent_hrs'].sum()
+
+            filtered_groups.append(period_df)
+        df_filtered = pd.concat(filtered_groups, ignore_index=True)
+
+        # log.debug(f"\n{df_filtered}")
+
+        Charts.plot_rolling_7d_average_compared(
+            df=df_filtered,  
+            course_highlight=course, 
+            # period_highlight=period, 
+            window=7
+        )
         return None
     
     @staticmethod
@@ -270,7 +230,7 @@ class Orchestrators:
         db.insert_to_main_data(df=df)
 
         period_start = {cperiod:cstart}
-        daily_df = DFTransformers.basic_to_daily_clean(df, period_start)
+        daily_df = DFTransformers.basic_to_daily_clean_new(df, period_start)
         db.insert_daily_data(daily_df)
 
         # weekly_df = DFTransformers.daily_to_weekly_clean(daily_df)
@@ -290,7 +250,7 @@ class Orchestrators:
 
         # period_start = {CURRENT_PERIOD:CURRENT_PERIOD_START}
 
-        daily_df = DFTransformers.basic_to_daily_clean(df)
+        daily_df = DFTransformers.basic_to_daily_clean_new(df)
         db.upsert_to_tables(table='daily', df=daily_df)
 
         # weekly_df = DFTransformers.daily_to_weekly_clean(daily_df)
@@ -476,21 +436,72 @@ def get_current_period_config()-> dict:
 
 def filter_df_excluded(
     df:pd.DataFrame,
-    excluded_list:list|None=None,
+    excluded_list:list|str|None=None,
     ) -> DataFrame:
-
-    if excluded_list is None:
-        excluded_list = ConfigManager().load_json_config().get("current_period_data", {}).get("default_exclude", None)
-        if excluded_list is None: return df
+    if excluded_list is None or excluded_list == "[]": 
+        log.debug(f"No subject filtered.")
+        return df
     
+    if isinstance(excluded_list, str):
+        excluded_list = [x.strip() for x in excluded_list.split(",") if x.strip()]
+
     log.debug(f"Filtering df to exclude {excluded_list}")
     filter_df = df[~df["subject"].isin(excluded_list)] 
     return filter_df
 
+def fill_daily_missing_dates(
+        daily_df:pd.DataFrame, 
+        start_date:pd.Timestamp|None=None
+    ) ->pd.DataFrame:
+    '''
+    Fills missing dates from the daily dataframe with "time_spent_hrs"=0, "subject"=None
+    Supposed to be used for only one course - period at a time, as it uses the first row to fill the rest on these. 
+    '''    
+    df = daily_df.copy()
+    if df['course'].nunique() != 1 or df['period'].nunique() != 1:
+        raise ValueError("daily_df must contain exactly one course and one period.")   
+     
+    # TODO: this shouldnt be necessary here as it is (or should be) handled upstream
+    df['date'] = pd.to_datetime(df['date'])
+
+    course = df['course'].iloc[0]
+    period = df['period'].iloc[0]
+
+    df_date_start = start_date if start_date else df['date'].min()
+    df_date_end = df['date'].max()
+    
+    # full_range = pd.DataFrame({'date': pd.date_range(df_date_start, df_date_end, freq='D')})
+    full_dates = pd.date_range(df_date_start, df_date_end, freq='D')
+
+    present_dates = pd.DatetimeIndex(df['date'].dt.normalize().unique())
+    missing_dates = pd.DatetimeIndex(full_dates).difference(present_dates)
+
+    if len(missing_dates) == 0:
+        return df.sort_values('date', kind='stable').reset_index(drop=True)
+
+    filler = pd.DataFrame({
+        'course': course,
+        'period': period,
+        'subject': None,
+        'time_spent_hrs': 0.0,
+        'date': missing_dates
+    })
+
+    out = (
+        pd.concat([df, filler], ignore_index=True)
+          .sort_values('date', kind='stable')
+          .reset_index(drop=True)
+    )
+
+    # log.debug(f"Filled empty dates. Earliest date={out['date'].min()}")
+
+    return out
+    
+@deprecated("...")
 def add_start_date_df(df_in, start_date=None, course=None, period=None)->pd.DataFrame:
     '''
     Backfills a dataframe with date column with empty data on "subject" and "time_spent_hrs".
-    Allows giving it a start_date, a course and period to search the db (TO ADD IN FUTURE), or
+    Allows giving it a start_date, a course and period to search the db, or
     nothing at all thus using the current period start_date by default.
     '''
     def get_period_start_date()-> datetime:

@@ -76,7 +76,7 @@ class ExcelImporter:
         if self.file_path is not None: path = self.file_path
         elif self.file_path is None: path = folder / filename
         elif folder is None: folder = Path(self.extraction_folder_dir) 
-        print(f"path={path}")
+
         if not path.exists() or not path.is_file():
             raise FileNotFoundError(f"{path!r} does not exist or is not a file.")
 

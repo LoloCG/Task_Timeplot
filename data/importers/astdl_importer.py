@@ -16,8 +16,14 @@ class AbstractSpoonTDLImporter:
             csv_path = Path(csv_path)
         if not csv_path.exists():
             raise(f"Import file path does not exist: {csv_path}")
-        
-        raw_df = ExcelImporter(file_path=csv_path).get_df_from_file()
+
+        csv_kwargs={
+            "skiprows": 1,
+            "decimal": ",",
+            "sep": "\t",
+            "encoding": "utf-16",
+        }
+        raw_df = ExcelImporter(csv_path).get_df_from_file(csv_kwargs=csv_kwargs)
         if raw == True:
             return raw_df
         
@@ -25,12 +31,16 @@ class AbstractSpoonTDLImporter:
             raise(f"CSV config not given during import")
             return None
         
+        # log.debug(f"raw df before cleaning:\n{raw_df}")
+        # log.debug(f"periods={csv_config_dict["periods"]}")
+
         df = cls.perform_basic_cleaning(
             df_raw=raw_df,
             new_course_name=csv_config_dict["course_name"],
             period_mappings=csv_config_dict["periods"]
         )
 
+        # log.debug(f"cleaned df={df}")
         return df
 
     @classmethod
@@ -133,7 +143,7 @@ class AbstractSpoonTDLImporter:
         cleaner.convert_df_times(time_column='End Time', single_col=True)
 
         cleaner.dataframe = join_dates_times(cleaner.dataframe)  
-
+        
         cleaner.replace_comma_to_dot(column='Time Spent (Hrs)')
 
         cleaner.dataframe = delete_negative_times(cleaner.dataframe)

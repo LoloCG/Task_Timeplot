@@ -6,8 +6,11 @@ from dataclasses import dataclass
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, Integer, String, DateTime, Float, Boolean, inspect, text, create_engine, true
-
+from sqlalchemy import (
+    Column, Integer, 
+    String, DateTime, Float, 
+    Boolean, inspect, 
+    select, text, create_engine, true)
 
 from utils.logger import LoggerSingleton
 log = LoggerSingleton().get_logger()
@@ -119,15 +122,52 @@ class DBManager():
         finally:
             session.close()
 
-    def insert_period_data(self, course:str, period:str, start_date:DateTime, finished:bool = True):
+    def change_auto_exclude(self, course:str, period:str, auto_exclude:str|list|None):
+        session = self.session()
+        try:
+            stmt = select(PeriodDataTable).where(
+                PeriodDataTable.course == course,
+                PeriodDataTable.period == period,
+            )
+            row = session.execute(stmt).scalar_one_or_none()
+
+            if row is None:
+                raise ValueError(f"No period_data row found for course={course!r}, period={period!r}")
+            
+            if isinstance(auto_exclude, list): auto_exclude = str(auto_exclude)
+            row.auto_exclude = auto_exclude
+            
+            session.commit()
+            return row  # optional: return updated ORM object
+        except:
+            session.rollback()
+            log.error("Error while trying to update auto_exclude in period_data table")
+            raise
+        finally:
+            session.close()
+
+    def insert_period_data(self, 
+            course:str, 
+            period:str, 
+            start_date:DateTime, 
+            auto_exclude:String|list|None=None, 
+            finished:bool = True
+        ):
         log.debug("Inserting to period_data table.")
+        
+        if auto_exclude is not None:
+            if isinstance(auto_exclude, list) and auto_exclude == "[]":
+                auto_exclude = None
+            else: auto_exclude = str(auto_exclude)
+
         session = self.session()
         try:
             session.add(PeriodDataTable(
                 course=course,
                 period=period,
                 start_date=start_date,
-                finished=finished
+                finished=finished,
+                auto_exclude=auto_exclude
             ))
             session.commit()
         except:
@@ -168,6 +208,29 @@ class DBManager():
         finally:
             session.close()
     '''
+
+    def get_period_data(self, 
+        course:str, 
+        period:str, 
+    )->dict:
+        session = self.session()
+        query = session.query(PeriodDataTable)
+        if course is not None:
+            query = query.filter(PeriodDataTable.course == course)
+        if period is not None:
+            query = query.filter(PeriodDataTable.period == period)
+        results = query.all()
+
+        records = {
+            "id":           results[0].id,
+            "course":       results[0].course,
+            "period":       results[0].period,
+            "start_date":   results[0].start_date,
+            "finished":     results[0].finished,
+            "auto_exclude": convert_str_list_to_list(results[0].auto_exclude)
+        }
+        
+        return records
 
     def get_main_data(self,
         course:str | None = None, 
@@ -284,6 +347,7 @@ class PeriodDataTable(Base):
     start_date      = Column(DateTime(timezone=True))
     # end_date        = Column(DateTime(timezone=True), nullable=True, default=None)
     finished        = Column(Boolean, default=True)
+    auto_exclude    = Column(String, nullable=True)
 
 class DailyDataTable(Base):
     __tablename__ = 'daily_data'
@@ -296,6 +360,31 @@ class DailyDataTable(Base):
     subject         = Column(String, 
                         primary_key=True,nullable=True)
     time_spent_hrs  = Column(Float)
+
+
+def convert_str_list_to_list(str_list: str | list | None) -> list[str]:
+    import ast
+    if str_list is None:
+        return []
+    
+    if isinstance(str_list, list):
+        return [str(x).strip() for x in str_list if str(x).strip()]
+
+    s = str(str_list).strip()
+    if s == "" or s == "[]":
+        return []
+    
+    if s.startswith("[") and s.endswith("]"):
+        try:
+            parsed = ast.literal_eval(s)
+            if isinstance(parsed, list):
+                return [str(x).strip() for x in parsed if str(x).strip()]
+        except (ValueError, SyntaxError):
+            pass  # fall through
+
+    # Comma-separated fallback
+    return [x.strip().strip("'\"") for x in s.split(",") if x.strip().strip("'\"")]
+
 
 ''' Removed until implementation
 class WeeklyDataTable(Base):

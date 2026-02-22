@@ -1,10 +1,32 @@
 import pandas as pd
+from warnings import deprecated
 
 from utils.logger import LoggerSingleton
 log = LoggerSingleton().get_logger()
 
 class DFTransformers:
     @staticmethod
+    def basic_to_daily_clean_new(df_basic, periods_start: dict[str, str] | None = None):
+        log.debug("Converting basic data to daily data.")
+        wanted_cols = ['course', 'period', 'subject', 'time_spent_hrs', 'start_time']
+
+        df = df_basic[wanted_cols].copy()
+        df['start_time'] = pd.to_datetime(df['start_time'], errors='coerce')
+
+        df['date'] = df['start_time'].dt.normalize()  # midnight timestamp for the day
+        # or: df['date'] = df['start_time'].dt.date   # python date objects
+
+        df = (
+            df.groupby(['course', 'period', 'subject', 'date'], as_index=False, dropna=False)
+            ['time_spent_hrs'].sum()
+        )
+
+        df['date'] = df['date'].dt.date
+
+        return df
+
+    @staticmethod
+    @deprecated("Change to basic_to_daily_clean_new, where it does not fill empty days....")
     def basic_to_daily_clean(df_basic, periods_start: dict[str,str] | None = None):
         '''
         example of periods_start = {

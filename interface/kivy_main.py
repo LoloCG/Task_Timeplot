@@ -198,6 +198,18 @@ class MainWindows(App):
             AddPeriodPopup(on_submit=on_submit).open()
         
         else:
+            if not start_dict.get("ask_sync_path", False):
+                try:
+                    log.debug("Running startup sync check before first stats refresh")
+                    Orchestrators.check_sp_sync()
+                except Exception as exc:
+                    log.warning(
+                        f"Startup sync failed, continuing with existing DB data: {exc}",
+                        exc_info=True,
+                    )
+            else:
+                log.warning("Skipping startup sync check: sync path is not configured")
+
             self.root.ids.stats_panel.refresh()
             log.debug(f"returning to MainMenuLayout")
             return MainMenuLayout

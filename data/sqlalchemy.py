@@ -221,6 +221,9 @@ class DBManager():
             query = query.filter(PeriodDataTable.period == period)
         results = query.all()
 
+        if not results:
+            raise ValueError(f"No period_data row found for course={course!r}, period={period!r}")
+
         records = {
             "id":           results[0].id,
             "course":       results[0].course,
@@ -262,8 +265,22 @@ class DBManager():
             }
             for row in results
         ]
-        
+
         df = pd.DataFrame.from_records(records)
+        if df.empty:
+            return pd.DataFrame(
+                columns=[
+                    "course",
+                    "period",
+                    "subject",
+                    "task_name",
+                    "start_time",
+                    "end_time",
+                    "time_spent_hrs",
+                    "finished",
+                ]
+            )
+
         df["start_time"] = pd.to_datetime(df["start_time"])
         df["end_time"] = pd.to_datetime(df["end_time"])
 
@@ -298,6 +315,11 @@ class DBManager():
             for row in results
         ]
         df = pd.DataFrame.from_records(records)
+        if df.empty:
+            return pd.DataFrame(
+                columns=["date", "course", "period", "subject", "time_spent_hrs"]
+            )
+
         df["date"] = pd.to_datetime(df["date"])
 
         return df

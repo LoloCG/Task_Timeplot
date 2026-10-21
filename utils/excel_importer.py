@@ -2,6 +2,7 @@
 from my own tools at:
 https://github.com/LoloCG/Lolos_Packages/tree/main/Data_Analysis/Excel_Tools
 '''
+from tkinter.messagebox import NO
 import pandas as pd
 import os
 from pathlib import Path
@@ -14,8 +15,12 @@ class ExcelImporter:
         files = eimp.list_folder_excel_files()
         file_df = eimp.get_df_from_file(files[0])
     '''
-    def __init__(self):
-        self.extraction_folder_dir = None
+    def __init__(self, file_path:str|Path=None, extraction_folder_dir=None):
+        if file_path is not None:
+            if type(file_path) == str: self.file_path = Path(file_path)
+            else: self.file_path = file_path
+
+        self.extraction_folder_dir = extraction_folder_dir
 
     def select_folder(self, folder_dir):
         if not os.path.exists(folder_dir):
@@ -39,7 +44,8 @@ class ExcelImporter:
         return [f.name for f in files]
     
     def get_df_from_file(self,
-        filename: str | Path,
+        filename: str | Path = None,
+        folder: str|Path = None,
         import_nan: bool = False,
         csv_kwargs: dict = None,
         excel_kwargs: dict = None
@@ -55,8 +61,8 @@ class ExcelImporter:
         Any kwargs you pass in csv_kwargs / excel_kwargs will override the defaults.
         """
         def get_from_csv():
-            defaults = {'encoding': 'utf-16', 'delimiter': '\t', 'skiprows': 1}
-            df = pd.read_csv(path, **{**defaults, **csv_kwargs})
+            defaults = {"encoding": "utf-8"}
+            df = pd.read_csv(path, **(defaults | csv_kwargs))
 
             if not import_nan:
                 df = df.loc[:, df.columns.notnull()]
@@ -66,9 +72,11 @@ class ExcelImporter:
 
         csv_kwargs   = {} if csv_kwargs   is None else csv_kwargs
         excel_kwargs = {} if excel_kwargs is None else excel_kwargs
+        
+        if self.file_path is not None: path = self.file_path
+        elif self.file_path is None: path = folder / filename
+        elif folder is None: folder = Path(self.extraction_folder_dir) 
 
-        folder = Path(self.extraction_folder_dir)
-        path   = folder / filename
         if not path.exists() or not path.is_file():
             raise FileNotFoundError(f"{path!r} does not exist or is not a file.")
 
@@ -111,9 +119,6 @@ class ExcelImporter:
             # maybe there is another way to do so?
             #  
         pass
-
-
-
 
     def add_sheets(self, excel_sheets): # TODO
         # add validation to check if the provided sheets actually exist in the Excel file. 

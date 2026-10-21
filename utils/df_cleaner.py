@@ -84,17 +84,28 @@ class DFCleaner:
 
     def replace_comma_to_dot(self, column):
         df = self.dataframe
-        
         self.column_exists(column)
 
-        if not pd.api.types.is_string_dtype(df[column]):
-            raise TypeError(f"Expected a string column for {column}.")
+        s = df[column]
 
-        df[column] = df[column].astype(str).str.replace(',', '.').astype(float)
+        # already numeric → nothing to do
+        if pd.api.types.is_numeric_dtype(s):
+            return self
 
-        self.dataframe = df
+        # string → convert
+        if pd.api.types.is_string_dtype(s):
+            df[column] = (
+                s.astype(str)
+                .str.replace(',', '.', regex=False)
+                .astype(float)
+            )
+            self.dataframe = df
+            return self
 
-        return self
+        # unsupported dtype
+        raise TypeError(
+            f"Column {column} has unsupported dtype {s.dtype}"
+        )
 
     def normalize_column_strings(self, column, headers=True, items=True):
         df = self.dataframe

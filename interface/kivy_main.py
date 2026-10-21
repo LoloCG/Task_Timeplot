@@ -3,6 +3,7 @@ os.environ['KIVY_LOG_MODE'] = 'PYTHON'
 
 from core.orchestrators import Orchestrators, StartSequence
 from data.sqlalchemy import DBManager
+from data.config_handler import ConfigManager
 
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
@@ -14,7 +15,7 @@ from kivy.uix.scrollview import ScrollView
 from kivy.lang import Builder
 from kivy.uix.screenmanager import ScreenManager, Screen
 
-from interface.new_period_popup import AddPeriodPopup
+from interface.popups import AddPeriodPopup, ExcludeSubjectsPopup
 
 from utils.logger import LoggerSingleton
 log = LoggerSingleton().get_logger()
@@ -30,7 +31,10 @@ class StatsPanel(GridLayout):
         rows = [
             ("Last sync", stats.get("last_sync", "-")),
             ("Last day in DB", stats.get("last_db_day", "-")),
-            ("Hours worked today", f"{stats.get('last_db_hrs', 0):.2f}"),
+            ("Hours worked last day", f"{stats.get('last_db_hrs', 0):.2f}"),
+            ("This week hours", f"{stats.get('total_week_hours', 0):.2f}"),
+            ("Week daily avg", f"{stats.get('avg_week_daily', 0):.2f}"),
+
         ]
         for label, value in rows:
             self.add_widget(
@@ -48,15 +52,11 @@ class StatsPanel(GridLayout):
 class MainMenuLayout(BoxLayout):
     def __init__(self, **kwargs):
         super(MainMenuLayout, self).__init__(**kwargs)
-        Window.size = (500, 450)
+        Window.size = (400, 550)
         Window.minimum_width, Window.minimum_height = 500, 400
         Window.clearcolor = (0.1, 0.1, 0.1, 1)
                 
         self.add_widget(self.display_options())
-
-    def on_kv_post(self, base_widget):
-        if StartSequence.check_local_data_exists():
-            self.ids.stats_panel.refresh()
 
     def sync_and_refresh(self):
         Orchestrators.check_sp_sync()
@@ -66,7 +66,12 @@ class MainMenuLayout(BoxLayout):
     def display_options(self):
         options = {
             "Display Period Hours (bars)": Orchestrators.plot_daily_hours_bars,
+            "Display Weekly Hours (bars)": Orchestrators.plot_weekly_hours_bars,
+            "Display total Period Hours": Orchestrators.plot_total_horus_bars,
+            "Display week average (Line)": Orchestrators.plot_week_avg_line_compared,
+            "test":Orchestrators.import_past_data,
         }
+        
         scroll = ScrollView(size_hint=(1, 1))
         glayout = GridLayout(cols=1, spacing=10, size_hint_y=None, padding=(0, 10))
         glayout.bind(minimum_height=glayout.setter("height"))
@@ -78,9 +83,20 @@ class MainMenuLayout(BoxLayout):
         return scroll
 
     def open_add_period(self):
+        def on_submit(data: dict): 
+            log.info(data)
+            log.info(f"Feature not yet added.")
+        AddPeriodPopup(on_submit=on_submit).open() 
 
-        def on_submit(data: dict): log.info(data)
-        AddPeriodPopup(on_submit=on_submit).open()    
+    def open_exclude_subjects(self):
+        def on_submit(data: dict): 
+            log.info(data)
+   
+        ExcludeSubjectsPopup( 
+            cnfg_mng=ConfigManager,
+            db_mng=DBManager,
+            on_submit=on_submit
+        ).open() 
 
 KV_main_layout='''
 <StatsPanel>:
@@ -110,6 +126,14 @@ KV_main_layout='''
         Widget:
         Widget:
 
+        Button:
+            id: exclude_subjects_btn
+            text: "Exclude subjects"
+            font_size:12
+            size_hint: 1, 1
+            height: 44
+            on_press: root.open_exclude_subjects()
+    
     # Title
     Label:
         text: "Study Hours Analytics"
@@ -155,18 +179,39 @@ class MainWindows(App):
         return MainMenuLayout()
 
     def on_start(self):
-        if not StartSequence.check_local_data_exists():
+        start_dict = StartSequence.start_sequence()
+        log.debug(f"on_start payload = {start_dict}")
+        
+        if start_dict["ask_current_period"]:
+            log.debug(f"Asking for current period data")
             def on_submit(data: dict):
                 StartSequence.generate_from_start(
                     ccourse=data["course_name"],
                     cperiod=data["period_name"],
                     period_start=data["start_date"],
                 )
-                # refresh after bootstrap
-                if self.root and "stats_panel" in self.root.ids:
-                    self.root.ids.stats_panel.refresh()
-                    return MainMenuLayout
+                # # refresh after bootstrap
+                # if self.root and "stats_panel" in self.root.ids:
+                #     self.root.ids.stats_panel.refresh()
+                #     return MainMenuLayout
 
             AddPeriodPopup(on_submit=on_submit).open()
-
         
+        else:
+            if not start_dict.get("ask_sync_path", False):
+                try:
+                    log.debug("Running startup sync check before first stats refresh")
+                    Orchestrators.check_sp_sync()
+                except Exception as exc:
+                    log.warning(
+                        f"Startup sync failed, continuing with existing DB data: {exc}",
+                        exc_info=True,
+                    )
+            else:
+                log.warning("Skipping startup sync check: sync path is not configured")
+
+            self.root.ids.stats_panel.refresh()
+            log.debug(f"returning to MainMenuLayout")
+            return MainMenuLayout
+            
+

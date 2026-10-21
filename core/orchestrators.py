@@ -388,6 +388,86 @@ def pivot_time_by_subject_period(
     piv.columns = piv.columns.astype(str)
     return piv.sort_index()
 
+def get_subject_course_period_totals(
+    df: pd.DataFrame,
+    db_mngr: DBManager | None = None,
+    time_col: str = "time_spent_hrs",
+    subject_col: str = "subject",
+    course_col: str = "course",
+    period_col: str = "period",
+) -> pd.DataFrame:
+    """
+    Returns a pivot table with:
+    - rows: subjects
+    - columns: (course, period)
+    - values: total accumulated hours
+
+    The dataframe is filtered using each stored period's auto-exclude rules
+    before aggregation.
+    """
+
+    if df is None or df.empty:
+        return pd.DataFrame()
+
+    db_mngr = db_mngr or DBManager()
+
+    data = df.copy()
+    data = data[data[subject_col].notna()].copy()
+    if data.empty:
+        return pd.DataFrame()
+
+    data[subject_col] = data[subject_col].astype(str).str.strip()
+    data = data[
+        (data[subject_col] != "")
+        & (data[subject_col].str.lower() != "none")
+    ].copy()
+    if data.empty:
+        return pd.DataFrame()
+
+    filtered_groups: list[pd.DataFrame] = []
+    for (course_i, period_i), group in data.groupby([course_col, period_col], sort=True):
+        try:
+            period_data = db_mngr.get_period_data(course_i, period_i)
+            excluded = period_data.get("auto_exclude", [])
+        except Exception as exc:
+            excluded = []
+            log.warning(
+                "Missing period metadata for course=%s period=%s; continuing without exclusions (%s)",
+                course_i,
+                period_i,
+                exc,
+            )
+
+        group_filtered = filter_df_excluded(group, excluded_list=excluded)
+        if not group_filtered.empty:
+            filtered_groups.append(group_filtered)
+
+    if not filtered_groups:
+        return pd.DataFrame()
+
+    filtered_df = pd.concat(filtered_groups, ignore_index=True)
+
+    totals = (
+        filtered_df.groupby([subject_col, course_col, period_col], as_index=False)[time_col]
+        .sum()
+    )
+    if totals.empty:
+        return pd.DataFrame()
+
+    pivot_df = totals.pivot_table(
+        index=subject_col,
+        columns=[course_col, period_col],
+        values=time_col,
+        aggfunc="sum",
+        fill_value=0.0,
+    )
+
+    pivot_df = pivot_df.sort_index(axis=1)
+    subject_order = pivot_df.sum(axis=1).sort_values(ascending=False).index
+    pivot_df = pivot_df.loc[subject_order]
+
+    return pivot_df
+
 def get_week_df(
     df: pd.DataFrame,
     anchor_date: str | pd.Timestamp | None = None,

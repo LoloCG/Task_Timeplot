@@ -45,10 +45,15 @@ class StartSequence:
             log.debug(f"No data in db.")
             if StartSequence.config_cperiod_has_data(c_status.data) and not sync_path_req:
                 log.debug(f"Using config data to import from sync source")
-                StartSequence.first_import_from_config(
-                    cfg_data=c_status.data,
+                cperiod_data = c_status.data["current_period_data"]
+                StartSequence.generate_from_start(
+                    ccourse=cperiod_data["current_course"],
+                    cperiod=cperiod_data["current_period"],
+                    period_start=cperiod_data["period_start_date"],
+                    sync_source=c_status.data["sync_data"]["sync_file_path"],
+                    default_exclude=cperiod_data.get("default_exclude", []),
                     cfg_mngr=config_mng,
-                    db_mngr=db_mngr
+                    db_mngr=db_mngr,
                 )
                 mode = "IMPORTED"
 
@@ -64,25 +69,36 @@ class StartSequence:
         }
     
     @staticmethod
-    def first_import_from_config(cfg_data, cfg_mngr:ConfigManager=ConfigManager(), db_mngr:DBManager=DBManager()):
-        '''
-        ! - Assumes all necessary data required to import from superproductivity app is already present in config 
-            (sync_file_path, period_start_date, current_course, current_period).
-        Also updates config file with last update numbers. 
-        '''
-        cperiod_data = cfg_data["current_period_data"]
-        sync_source = cfg_data["sync_data"]["sync_file_path"]
-        
-        # FIXME: this will fail with an empty date...
-        period_start = datetime.strptime(cperiod_data["period_start_date"], '%d-%m-%Y').date()
-        
+    def generate_from_start(
+        ccourse: str,
+        cperiod: str,
+        period_start: str,
+        sync_source: str | Path | None = None,
+        default_exclude: list[str] | None = None,
+        cfg_mngr: ConfigManager | None = None,
+        db_mngr: DBManager | None = None,
+    ):
+        """Import the initial period from SuperProductivity and persist its startup state.
+
+        Values may come from the first-run popup or an existing config used to
+        repopulate an empty database. The import updates the data tables, period
+        record, current-period config, and sync metadata.
+        """
+        cfg_mngr = cfg_mngr or ConfigManager()
+        db_mngr = db_mngr or DBManager()
+        if sync_source is None:
+            sync_source = cfg_mngr.load_json_config()["sync_data"]["sync_file_path"]
+
+        period_start_date = datetime.strptime(period_start, '%d-%m-%Y').date()
+        default_exclude = [] if default_exclude is None else default_exclude
+
         importer = SPImportManager(path_str=sync_source)
-        tasks, projects = importer.get_sp_data(filter_date=period_start)
+        tasks, projects = importer.get_sp_data(filter_date=period_start_date)
         flat_tasks = importer.clean_sp_tasks(
             tasks=tasks,
             projects=projects, 
-            ccourse=cperiod_data["current_course"], 
-            cperiod=cperiod_data["current_period"]
+            ccourse=ccourse,
+            cperiod=cperiod,
         )
         df = importer.convert_tasks_to_df(flat_tasks, cstart=None)
 
@@ -91,15 +107,21 @@ class StartSequence:
         db_mngr.upsert_to_tables(table='daily', df=daily_df)
 
         db_mngr.insert_period_data(
-            course=cperiod_data["current_course"],
-            period=cperiod_data["current_period"],
-            start_date=period_start,
+            course=ccourse,
+            period=cperiod,
+            start_date=period_start_date,
             finished=False,
-            auto_exclude=cperiod_data['default_exclude']
+            auto_exclude=default_exclude,
         )
         
         sync_headers = importer.get_last_update_nums()
         data = {
+            "current_period_data": {
+                "current_course": ccourse,
+                "current_period": cperiod,
+                "period_start_date": period_start,
+                "default_exclude": default_exclude,
+            },
             "sync_data": {
                 "last_update": sync_headers["lastUpdate"],
                 "archive_young": sync_headers["archiveYoung"],

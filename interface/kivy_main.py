@@ -190,10 +190,8 @@ class MainWindows(App):
                     cperiod=data["period_name"],
                     period_start=data["start_date"],
                 )
-                # # refresh after bootstrap
-                # if self.root and "stats_panel" in self.root.ids:
-                #     self.root.ids.stats_panel.refresh()
-                #     return MainMenuLayout
+                if self.root and "stats_panel" in self.root.ids:
+                    self.root.ids.stats_panel.refresh()
 
             AddPeriodPopup(on_submit=on_submit).open()
         

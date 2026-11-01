@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from kivy.uix.popup import Popup
 from kivy.lang import Builder
 from kivy.properties import StringProperty, ObjectProperty
@@ -129,6 +131,70 @@ class AddPeriodPopup(Popup):
         self.dismiss()
 
 Builder.load_string(AddPeriodPopupKv)
+
+# --------------------------------------------------------
+
+SyncFilePopupKv = '''
+<SyncFilePopup>:
+    title: "Select Super Productivity sync file"
+    size_hint: 0.9, 0.85
+    auto_dismiss: False
+
+    BoxLayout:
+        orientation: "vertical"
+        padding: 16
+        spacing: 12
+
+        FileChooserListView:
+            id: file_chooser
+            filters: ["*.json"]
+            multiselect: False
+            dirselect: False
+
+        Label:
+            text: root.error_text
+            color: 1, 0, 0, 1
+            size_hint_y: None
+            height: "18dp"
+
+        BoxLayout:
+            size_hint_y: None
+            height: "48dp"
+            spacing: 8
+
+            Widget:
+            Button:
+                text: "Cancel"
+                on_release: root.dismiss()
+            Button:
+                text: "Select"
+                on_release: root.handle_submit(file_chooser.selection)
+'''
+
+class SyncFilePopup(Popup):
+    on_submit = ObjectProperty(allownone=True)
+    error_text = StringProperty("")
+
+    def __init__(self, on_submit=None, **kwargs):
+        super().__init__(**kwargs)
+        self.on_submit = on_submit
+
+    def handle_submit(self, selection):
+        if not selection:
+            self.error_text = "Select a sync file."
+            return
+
+        selected_path = Path(selection[0])
+        if not selected_path.is_file():
+            self.error_text = "The selected path is not a file."
+            return
+
+        if callable(self.on_submit):
+            self.on_submit(str(selected_path.resolve()))
+
+        self.dismiss()
+
+Builder.load_string(SyncFilePopupKv)
 
 # --------------------------------------------------------
 

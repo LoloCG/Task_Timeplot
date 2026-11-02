@@ -11,8 +11,6 @@ from core.charts import Charts
 from utils.logger import LoggerSingleton
 log = LoggerSingleton().get_logger()
 
-SP_FILE = Path(r"C:\Users\Lolo\Nextcloud\Super Productivity\sync-data.json")
-
 class StartSequence:
     @staticmethod
     def start_sequence():
@@ -22,7 +20,7 @@ class StartSequence:
         # TODO: add recovery/migrate if exists but invalid
         log.debug(f"config status: exists={c_status.exists}, valid={c_status.valid}")
         if c_status.data == None or c_status.exists == False:
-            config_mng.generate_new(sync_file_path=SP_FILE) # FIXME: at the moment whole code assumes hardcoded syncpath
+            config_mng.generate_new()
             c_status = config_mng.inspect()
         if not c_status.valid:
             raise RuntimeError("Config exists but is invalid JSON.")

@@ -1,6 +1,11 @@
+import os
+from pathlib import Path
+from tkinter import Tk, filedialog
+
+from kivy.app import App
 from kivy.uix.popup import Popup
 from kivy.lang import Builder
-from kivy.properties import StringProperty, ObjectProperty
+from kivy.properties import BooleanProperty, StringProperty, ObjectProperty
 from kivy.uix.togglebutton import ToggleButton
 
 from utils.logger import LoggerSingleton
@@ -10,7 +15,7 @@ AddPeriodPopupKv = '''
 <AddPeriodPopup>:
     title: "Add Period"
     size_hint: 0.85, 0.6
-    auto_dismiss: True
+    auto_dismiss: not root.fresh_start
 
     BoxLayout:
         orientation: "vertical"
@@ -74,14 +79,15 @@ AddPeriodPopupKv = '''
 
             Widget:
             Button:
-                text: "Cancel"
-                on_release: root.dismiss()
+                text: "Exit application" if root.fresh_start else "Cancel"
+                on_release: root.handle_cancel()
             Button:
                 text: "OK"
                 on_release: root.handle_ok()
 '''
 
 class AddPeriodPopup(Popup):
+    fresh_start = BooleanProperty(False)
     start_date  = StringProperty("")
     course_name = StringProperty("")
     period_name = StringProperty("")
@@ -97,6 +103,7 @@ class AddPeriodPopup(Popup):
             course_name="", period_name="", 
             **kwargs):
         super().__init__(**kwargs)
+        self.fresh_start = fresh_start
         self.on_submit = on_submit
         self.start_date = start_date
         self.course_name = course_name
@@ -128,7 +135,114 @@ class AddPeriodPopup(Popup):
 
         self.dismiss()
 
+    def handle_cancel(self):
+        if self.fresh_start:
+            App.get_running_app().stop()
+            return
+
+        self.dismiss()
+
 Builder.load_string(AddPeriodPopupKv)
+
+# --------------------------------------------------------
+
+SyncFilePopupKv = '''
+<SyncFilePopup>:
+    title: "Select Super Productivity sync file"
+    size_hint: 0.85, 0.45
+    auto_dismiss: False
+
+    BoxLayout:
+        orientation: "vertical"
+        padding: 16
+        spacing: 12
+
+        Label:
+            text: "Choose the Super Productivity JSON sync file."
+            size_hint_y: None
+            height: "32dp"
+
+        BoxLayout:
+            size_hint_y: None
+            height: "40dp"
+            spacing: 8
+
+            TextInput:
+                text: root.selected_path
+                readonly: True
+                multiline: False
+
+            Button:
+                text: "Browse..."
+                size_hint_x: None
+                width: "100dp"
+                on_release: root.browse()
+
+        Label:
+            text: root.error_text
+            color: 1, 0, 0, 1
+            size_hint_y: None
+            height: "18dp"
+
+        BoxLayout:
+            size_hint_y: None
+            height: "48dp"
+            spacing: 8
+
+            Widget:
+            Button:
+                text: "Exit application"
+                on_release: root.exit_application()
+            Button:
+                text: "Accept"
+                disabled: not root.selected_path
+                on_release: root.handle_submit()
+'''
+
+class SyncFilePopup(Popup):
+    selected_path = StringProperty("")
+    error_text = StringProperty("")
+    on_submit = ObjectProperty(allownone=True)
+
+    def __init__(self, on_submit=None, **kwargs):
+        super().__init__(**kwargs)
+        self.on_submit = on_submit
+
+    def browse(self):
+        dialog_root = Tk()
+        dialog_root.withdraw()
+        try:
+            selected_path = filedialog.askopenfilename(
+                parent=dialog_root,
+                title="Select Super Productivity sync file",
+                initialdir=os.path.expanduser("~"),
+                filetypes=(
+                    ("JSON files", "*.json"),
+                    ("All files", "*.*"),
+                ),
+            )
+        finally:
+            dialog_root.destroy()
+
+        if selected_path:
+            self.selected_path = selected_path
+            self.error_text = ""
+
+    def handle_submit(self):
+        selected_path = Path(self.selected_path)
+        if not selected_path.is_file():
+            self.error_text = "The selected path is not a file."
+            return
+
+        if callable(self.on_submit):
+            self.on_submit(str(selected_path.resolve()))
+
+        self.dismiss()
+
+    def exit_application(self):
+        App.get_running_app().stop()
+
+Builder.load_string(SyncFilePopupKv)
 
 # --------------------------------------------------------
 

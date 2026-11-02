@@ -198,7 +198,10 @@ class MainWindows(App):
             return
 
         if start_payload["ask_current_period"]:
-            AddPeriodPopup(on_submit=self.handle_new_period).open()
+            AddPeriodPopup(
+                fresh_start=True,
+                on_submit=self.handle_new_period,
+            ).open()
             return
         
         self.finish_startup()

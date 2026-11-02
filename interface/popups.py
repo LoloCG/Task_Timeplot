@@ -2,9 +2,10 @@ import os
 from pathlib import Path
 from tkinter import Tk, filedialog
 
+from kivy.app import App
 from kivy.uix.popup import Popup
 from kivy.lang import Builder
-from kivy.properties import StringProperty, ObjectProperty
+from kivy.properties import BooleanProperty, StringProperty, ObjectProperty
 from kivy.uix.togglebutton import ToggleButton
 
 from utils.logger import LoggerSingleton
@@ -14,7 +15,7 @@ AddPeriodPopupKv = '''
 <AddPeriodPopup>:
     title: "Add Period"
     size_hint: 0.85, 0.6
-    auto_dismiss: True
+    auto_dismiss: not root.fresh_start
 
     BoxLayout:
         orientation: "vertical"
@@ -78,14 +79,15 @@ AddPeriodPopupKv = '''
 
             Widget:
             Button:
-                text: "Cancel"
-                on_release: root.dismiss()
+                text: "Exit application" if root.fresh_start else "Cancel"
+                on_release: root.handle_cancel()
             Button:
                 text: "OK"
                 on_release: root.handle_ok()
 '''
 
 class AddPeriodPopup(Popup):
+    fresh_start = BooleanProperty(False)
     start_date  = StringProperty("")
     course_name = StringProperty("")
     period_name = StringProperty("")
@@ -101,6 +103,7 @@ class AddPeriodPopup(Popup):
             course_name="", period_name="", 
             **kwargs):
         super().__init__(**kwargs)
+        self.fresh_start = fresh_start
         self.on_submit = on_submit
         self.start_date = start_date
         self.course_name = course_name
@@ -129,6 +132,13 @@ class AddPeriodPopup(Popup):
 
         if callable(self.on_submit):
             self.on_submit(payload)
+
+        self.dismiss()
+
+    def handle_cancel(self):
+        if self.fresh_start:
+            App.get_running_app().stop()
+            return
 
         self.dismiss()
 
@@ -181,8 +191,8 @@ SyncFilePopupKv = '''
 
             Widget:
             Button:
-                text: "Cancel"
-                on_release: root.dismiss()
+                text: "Exit application"
+                on_release: root.exit_application()
             Button:
                 text: "Accept"
                 disabled: not root.selected_path
@@ -228,6 +238,9 @@ class SyncFilePopup(Popup):
             self.on_submit(str(selected_path.resolve()))
 
         self.dismiss()
+
+    def exit_application(self):
+        App.get_running_app().stop()
 
 Builder.load_string(SyncFilePopupKv)
 

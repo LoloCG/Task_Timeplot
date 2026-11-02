@@ -1,4 +1,6 @@
+import os
 from pathlib import Path
+from tkinter import Tk, filedialog
 
 from kivy.uix.popup import Popup
 from kivy.lang import Builder
@@ -137,7 +139,7 @@ Builder.load_string(AddPeriodPopupKv)
 SyncFilePopupKv = '''
 <SyncFilePopup>:
     title: "Select Super Productivity sync file"
-    size_hint: 0.9, 0.85
+    size_hint: 0.85, 0.45
     auto_dismiss: False
 
     BoxLayout:
@@ -145,11 +147,26 @@ SyncFilePopupKv = '''
         padding: 16
         spacing: 12
 
-        FileChooserListView:
-            id: file_chooser
-            filters: ["*.json"]
-            multiselect: False
-            dirselect: False
+        Label:
+            text: "Choose the Super Productivity JSON sync file."
+            size_hint_y: None
+            height: "32dp"
+
+        BoxLayout:
+            size_hint_y: None
+            height: "40dp"
+            spacing: 8
+
+            TextInput:
+                text: root.selected_path
+                readonly: True
+                multiline: False
+
+            Button:
+                text: "Browse..."
+                size_hint_x: None
+                width: "100dp"
+                on_release: root.browse()
 
         Label:
             text: root.error_text
@@ -167,24 +184,42 @@ SyncFilePopupKv = '''
                 text: "Cancel"
                 on_release: root.dismiss()
             Button:
-                text: "Select"
-                on_release: root.handle_submit(file_chooser.selection)
+                text: "Accept"
+                disabled: not root.selected_path
+                on_release: root.handle_submit()
 '''
 
 class SyncFilePopup(Popup):
-    on_submit = ObjectProperty(allownone=True)
+    selected_path = StringProperty("")
     error_text = StringProperty("")
+    on_submit = ObjectProperty(allownone=True)
 
     def __init__(self, on_submit=None, **kwargs):
         super().__init__(**kwargs)
         self.on_submit = on_submit
 
-    def handle_submit(self, selection):
-        if not selection:
-            self.error_text = "Select a sync file."
-            return
+    def browse(self):
+        dialog_root = Tk()
+        dialog_root.withdraw()
+        try:
+            selected_path = filedialog.askopenfilename(
+                parent=dialog_root,
+                title="Select Super Productivity sync file",
+                initialdir=os.path.expanduser("~"),
+                filetypes=(
+                    ("JSON files", "*.json"),
+                    ("All files", "*.*"),
+                ),
+            )
+        finally:
+            dialog_root.destroy()
 
-        selected_path = Path(selection[0])
+        if selected_path:
+            self.selected_path = selected_path
+            self.error_text = ""
+
+    def handle_submit(self):
+        selected_path = Path(self.selected_path)
         if not selected_path.is_file():
             self.error_text = "The selected path is not a file."
             return

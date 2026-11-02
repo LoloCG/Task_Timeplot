@@ -15,7 +15,11 @@ from kivy.uix.scrollview import ScrollView
 from kivy.lang import Builder
 from kivy.uix.screenmanager import ScreenManager, Screen
 
-from interface.popups import AddPeriodPopup, ExcludeSubjectsPopup
+from interface.popups import (
+    AddPeriodPopup,
+    ExcludeSubjectsPopup,
+    SyncFilePopup,
+)
 
 from utils.logger import LoggerSingleton
 log = LoggerSingleton().get_logger()
@@ -182,34 +186,56 @@ class MainWindows(App):
         start_dict = StartSequence.start_sequence()
         log.debug(f"on_start payload = {start_dict}")
         
-        if start_dict["ask_current_period"]:
-            log.debug(f"Asking for current period data")
-            def on_submit(data: dict):
-                StartSequence.generate_from_start(
-                    ccourse=data["course_name"],
-                    cperiod=data["period_name"],
-                    period_start=data["start_date"],
-                )
-                if self.root and "stats_panel" in self.root.ids:
-                    self.root.ids.stats_panel.refresh()
+        if start_dict["ask_current_period"] or start_dict["ask_sync_path"]:
+            self.run_fresh_start_sequence(start_dict)
+            return
 
-            AddPeriodPopup(on_submit=on_submit).open()
+        self.finish_startup()
+
+    def run_fresh_start_sequence(self, start_payload):
+        if start_payload["ask_sync_path"]:
+            SyncFilePopup(on_submit=self.handle_sync_path).open()
+            return
+
+        if start_payload["ask_current_period"]:
+            AddPeriodPopup(on_submit=self.handle_new_period).open()
+            return
         
-        else:
-            if not start_dict.get("ask_sync_path", False):
-                try:
-                    log.debug("Running startup sync check before first stats refresh")
-                    Orchestrators.check_sp_sync()
-                except Exception as exc:
-                    log.warning(
-                        f"Startup sync failed, continuing with existing DB data: {exc}",
-                        exc_info=True,
-                    )
-            else:
-                log.warning("Skipping startup sync check: sync path is not configured")
+        self.finish_startup()
 
+    def finish_startup(self):
+        try:
+            log.debug("Running startup sync check before first stats refresh")
+            Orchestrators.check_sp_sync()
+        except Exception as exc:
+            log.warning(
+                f"Startup sync failed, continuing with existing DB data: {exc}",
+                exc_info=True,
+            )
+
+        if self.root and "stats_panel" in self.root.ids:
             self.root.ids.stats_panel.refresh()
-            log.debug(f"returning to MainMenuLayout")
-            return MainMenuLayout
-            
 
+        log.debug(f"returning to MainMenuLayout")
+  
+    def handle_sync_path(self, sync_path:str):
+        ConfigManager().json_upsert({
+            "sync_data": {
+                "sync_file_path": sync_path,
+            }
+        })
+
+        updated_payload = StartSequence.start_sequence()
+        self.run_fresh_start_sequence(updated_payload)
+
+    def handle_new_period(self, data:dict):
+        log.debug(f"Generating data for the submitted current period")
+
+        StartSequence.generate_from_start(
+            ccourse=data["course_name"],
+            cperiod=data["period_name"],
+            period_start=data["start_date"],
+        )
+
+        if self.root and "stats_panel" in self.root.ids:
+            self.root.ids.stats_panel.refresh()

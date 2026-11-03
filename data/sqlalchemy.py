@@ -1,5 +1,6 @@
 # from requests import session
 from pathlib import Path
+import sys
 import pandas as pd
 from dataclasses import dataclass
 
@@ -29,10 +30,16 @@ class DBManager():
     def __init__(
             self, 
             db_name="studyanalytics.db", 
-            db_path:str|Path=Path(__file__).resolve().parent.parent
+            db_path:str|Path|None=None
         ):
+        if db_path is None:
+            db_path = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).parents[1]
+            
+        db_path = Path(db_path).resolve()
+        db_path.mkdir(parents=True, exist_ok=True)
+
         self.db_file = db_path / db_name
-        self.engine = create_engine(f"sqlite:///{db_path}/{db_name}", echo=False)
+        self.engine = create_engine(f"sqlite:///{self.db_file}", echo=False)
         self.session = sessionmaker(bind=self.engine)
 
     def inspect_status(self)->DBStatus:

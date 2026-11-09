@@ -1,4 +1,6 @@
 import os
+from tkinter import Tk, filedialog
+
 os.environ['KIVY_LOG_MODE'] = 'PYTHON'
 
 from core.orchestrators import Orchestrators, StartSequence
@@ -86,6 +88,22 @@ class MainMenuLayout(BoxLayout):
         scroll.add_widget(glayout)
         return scroll
 
+    def select_import_file(self, *_):
+        dialog_root = Tk()
+        dialog_root.withdraw()
+        try:
+            selected_path = filedialog.askopenfilename(
+                parent=dialog_root,
+                title="Select historical CSV file",
+                initialdir=os.path.expanduser("~"),
+                filetypes=(("CSV files", "*.csv"),),
+            )
+        finally:
+            dialog_root.destroy()
+
+        if selected_path:
+            log.info(f"Selected historical CSV (import not implemented): {selected_path}")
+
     def open_add_period(self):
         def on_submit(data: dict): 
             log.info(data)
@@ -127,8 +145,16 @@ KV_main_layout='''
             height: 44
             on_press: root.open_add_period()
 
-        Widget:
-        Widget:
+        Button:
+            id: import_csv_btn
+            text: "Import historical CSV..."
+            font_size: 12
+            size_hint: 1, 1
+            height: 44
+            text_size: self.width - 8, self.height
+            halign: "center"
+            valign: "middle"
+            on_press: root.select_import_file()
 
         Button:
             id: exclude_subjects_btn

@@ -75,7 +75,7 @@ class MainMenuLayout(BoxLayout):
             "Display Weekly Hours (bars)": Orchestrators.plot_weekly_hours_bars,
             "Display total Period Hours": Orchestrators.plot_total_horus_bars,
             "Display week average (Line)": Orchestrators.plot_week_avg_line_compared,
-            "test":Orchestrators.import_past_data,
+            "test": lambda *_: log.error("Feature not added"),
         }
         
         scroll = ScrollView(size_hint=(1, 1))
@@ -102,7 +102,12 @@ class MainMenuLayout(BoxLayout):
             dialog_root.destroy()
 
         if selected_path:
-            log.info(f"Selected historical CSV (import not implemented): {selected_path}")
+            try:
+                df = Orchestrators.import_past_data(selected_path)
+            except (OSError, ValueError) as exc:
+                log.error(f"Could not read historical CSV: {exc}")
+            else:
+                log.info(f"Validated {len(df)} historical CSV rows (import not implemented): {selected_path}")
 
     def open_add_period(self):
         def on_submit(data: dict): 

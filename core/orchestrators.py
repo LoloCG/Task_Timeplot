@@ -5,6 +5,7 @@ from pandas import DataFrame
 from sqlalchemy import true
 from data.sqlalchemy import DBManager
 from data.file_handler import SPImportManager, Path, DFTransformers, pd
+from data.importers.csv_importer import CSVImporter
 from data.config_handler import ConfigManager
 from core.charts import Charts
 
@@ -366,9 +367,9 @@ class Orchestrators:
         }
 
     @staticmethod
-    def import_past_data(*_):
-        log.error("Feature not added")
-        return
+    def import_past_data(csv_path: str | Path) -> DataFrame:
+        """Read and validate historical CSV data; database import is not implemented yet."""
+        return CSVImporter.load_main_data_csv(csv_path)
 
 def pivot_time_by_subject_period(
     df: pd.DataFrame,

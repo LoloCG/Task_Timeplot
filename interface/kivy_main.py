@@ -118,6 +118,9 @@ class MainMenuLayout(BoxLayout):
             start_date=review_data["start_date"],
             course_name=review_data["course_name"],
             period_name=review_data["period_name"],
+            subjects_list=review_data["subjects"],
+            auto_exclude=review_data["auto_exclude"],
+            show_exclusions=True,
         ).open()
 
     # def open_add_period(self):

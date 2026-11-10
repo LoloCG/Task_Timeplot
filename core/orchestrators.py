@@ -388,7 +388,7 @@ class Orchestrators:
             review_data = {
                 "course_name": course,
                 "period_name": period,
-                "start_date": "",
+                "start_date": period_df["start_time"].min().strftime("%d-%m-%Y"),
                 "subjects": sorted(period_df["subject"].unique().tolist()),
                 "row_count": len(period_df),
                 "finished": True,

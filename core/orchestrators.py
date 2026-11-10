@@ -246,22 +246,19 @@ class Orchestrators:
         return None
     
     @staticmethod
-    def insert_df_to_db(df, ccourse, cperiod, cstart):
+    def insert_df_to_db(df, ccourse, cperiod, cstart, finished: bool = False):
         db = DBManager()
         db.insert_to_main_data(df=df)
 
-        period_start = {cperiod:cstart}
+        period_start = {cperiod: cstart}
         daily_df = DFTransformers.basic_to_daily_clean_new(df, period_start)
         db.insert_daily_data(daily_df)
 
-        # weekly_df = DFTransformers.daily_to_weekly_clean(daily_df)
-        # db.insert_weekly_data(weekly_df)
-
         db.insert_period_data(
-            course=ccourse, 
-            period=cperiod, 
-            start_date=datetime.strptime(cstart, '%d-%m-%Y'), 
-            finished = False
+            course=ccourse,
+            period=cperiod,
+            start_date=datetime.strptime(cstart, '%d-%m-%Y'),
+            finished=finished,
         )
 
     @staticmethod

@@ -109,11 +109,11 @@ class MainMenuLayout(BoxLayout):
             else:
                 log.info(f"Validated {len(df)} historical CSV rows (import not implemented): {selected_path}")
 
-    def open_add_period(self):
-        def on_submit(data: dict): 
-            log.info(data)
-            log.info(f"Feature not yet added.")
-        AddPeriodPopup(on_submit=on_submit).open() 
+    # def open_add_period(self):
+    #     def on_submit(data: dict): 
+    #         log.info(data)
+    #         log.info(f"Feature not yet added.")
+    #     AddPeriodPopup(on_submit=on_submit).open() 
 
     def open_exclude_subjects(self):
         def on_submit(data: dict): 
@@ -142,13 +142,13 @@ KV_main_layout='''
         size_hint_y: None
         height: 44
         spacing: 10
-        Button:
-            id: add_period_btn
-            text: "Add new period"
-            font_size: 12
-            size_hint: 1, 1
-            height: 44
-            on_press: root.open_add_period()
+        # Button:
+        #     id: add_period_btn
+        #     text: "Add new period"
+        #     font_size: 12
+        #     size_hint: 1, 1
+        #     height: 44
+        #     on_press: root.open_add_period()
 
         Button:
             id: import_csv_btn
@@ -190,18 +190,6 @@ KV_main_layout='''
         height: 50
         on_press: root.sync_and_refresh()
 
-    # Not yet added:
-    # # Scroll area with options (we fill options_gl in Python)
-    # ScrollView:
-    #     id: options_scroll
-    #     size_hint: 1, 1
-    #     GridLayout:
-    #         id: options_gl
-    #         cols: 1
-    #         spacing: 10
-    #         padding: 0, 10
-    #         size_hint_y: None
-    #         height: self.minimum_height
 '''
 
 Builder.load_string(KV_main_layout)

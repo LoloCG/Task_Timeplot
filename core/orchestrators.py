@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from collections.abc import Callable
 from warnings import deprecated
 from numpy import full
 from pandas import DataFrame
@@ -364,9 +365,55 @@ class Orchestrators:
         }
 
     @staticmethod
-    def import_past_data(csv_path: str | Path) -> DataFrame:
-        """Read and validate historical CSV data; database import is not implemented yet."""
-        return CSVImporter.load_main_data_csv(csv_path)
+    def import_past_data(csv_path: str | Path, request_review: Callable | None = None) -> DataFrame:
+        """Read the CSV and optionally request one course/period review at a time.
+
+        request_review(review_data, submit_settings) presents a review. Calling
+        submit_settings(settings) logs those settings and advances to the next
+        group. Without confirmation the workflow stops. No data is imported yet.
+        The dataframe is returned without waiting for user reviews to finish.
+        """
+        df = CSVImporter.load_main_data_csv(csv_path)
+        if request_review is None:
+            return df
+
+        groups = iter(df.groupby(["course", "period"], sort=False))
+
+        def review_next():
+            item = next(groups, None)
+            if item is None:
+                return
+
+            (course, period), period_df = item
+            review_data = {
+                "course_name": course,
+                "period_name": period,
+                "start_date": "",
+                "subjects": sorted(period_df["subject"].unique().tolist()),
+                "row_count": len(period_df),
+                "finished": True,
+                "auto_exclude": [],
+            }
+            submitted = False
+
+            def submit_settings(settings: dict):
+                nonlocal submitted
+                if submitted:
+                    raise ValueError("This period has already been reviewed.")
+                if not isinstance(settings, dict):
+                    raise ValueError("Period settings must be a dictionary.")
+                
+                # TODO:
+                log.info("Reviewed historical period %s / %s (import not implemented): %s",
+                         course, period, settings)
+                submitted = True
+                review_next()
+
+            request_review(review_data, submit_settings)
+
+        review_next()
+        return df
+
 
 def pivot_time_by_subject_period(
     df: pd.DataFrame,

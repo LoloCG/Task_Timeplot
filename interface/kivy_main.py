@@ -88,7 +88,7 @@ class MainMenuLayout(BoxLayout):
         scroll.add_widget(glayout)
         return scroll
 
-    def select_import_file(self, *_):
+    def open_past_data_import(self, *_):
         dialog_root = Tk()
         dialog_root.withdraw()
         try:
@@ -159,7 +159,7 @@ KV_main_layout='''
             text_size: self.width - 8, self.height
             halign: "center"
             valign: "middle"
-            on_press: root.select_import_file()
+            on_press: root.open_past_data_import()
 
         Button:
             id: exclude_subjects_btn

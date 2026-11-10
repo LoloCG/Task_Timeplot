@@ -22,49 +22,53 @@ AddPeriodPopupKv = '''
         padding: 16
         spacing: 12
 
-        GridLayout:
-            cols: 2
-            row_default_height: "36dp"
-            row_force_default: True
-            size_hint_y: None
-            height: self.minimum_height
-            spacing: 8
+        ScrollView:
+            do_scroll_x: False
 
-            Label:
-                text: "Start date"
-                halign: "left"
-                valign: "middle"
-                text_size: self.size
-            TextInput:
-                text: root.start_date
-                hint_text: "e.g., 20-06-2025"
-                multiline: False
-                write_tab: False
-                on_text: root.start_date = self.text
+            GridLayout:
+                id: period_fields
+                cols: 2
+                row_default_height: "36dp"
+                row_force_default: True
+                size_hint_y: None
+                height: self.minimum_height
+                spacing: 8
 
-            Label:
-                text: "Course name"
-                halign: "left"
-                valign: "middle"
-                text_size: self.size
-            TextInput:
-                text: root.course_name
-                hint_text: "e.g., Pharmacy 25-26"
-                multiline: False
-                write_tab: False
-                on_text: root.course_name = self.text
+                Label:
+                    text: "Start date"
+                    halign: "left"
+                    valign: "middle"
+                    text_size: self.size
+                TextInput:
+                    text: root.start_date
+                    hint_text: "e.g., 20-06-2025"
+                    multiline: False
+                    write_tab: False
+                    on_text: root.start_date = self.text
 
-            Label:
-                text: "Period name"
-                halign: "left" 
-                valign: "middle"
-                text_size: self.size
-            TextInput:
-                text: root.period_name
-                hint_text: "e.g., 1st Semester"
-                multiline: False
-                write_tab: False
-                on_text: root.period_name = self.text
+                Label:
+                    text: "Course name"
+                    halign: "left"
+                    valign: "middle"
+                    text_size: self.size
+                TextInput:
+                    text: root.course_name
+                    hint_text: "e.g., Pharmacy 25-26"
+                    multiline: False
+                    write_tab: False
+                    on_text: root.course_name = self.text
+
+                Label:
+                    text: "Period name"
+                    halign: "left"
+                    valign: "middle"
+                    text_size: self.size
+                TextInput:
+                    text: root.period_name
+                    hint_text: "e.g., 1st Semester"
+                    multiline: False
+                    write_tab: False
+                    on_text: root.period_name = self.text
 
         Label:
             text: root.error_text
@@ -82,6 +86,7 @@ AddPeriodPopupKv = '''
                 text: "Exit application" if root.fresh_start else "Cancel"
                 on_release: root.handle_cancel()
             Button:
+                id: submit_btn
                 text: "OK"
                 on_release: root.handle_ok()
 '''

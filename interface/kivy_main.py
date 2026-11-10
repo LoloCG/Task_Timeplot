@@ -103,11 +103,22 @@ class MainMenuLayout(BoxLayout):
 
         if selected_path:
             try:
-                df = Orchestrators.import_past_data(selected_path)
+                df = Orchestrators.import_past_data(
+                    selected_path,
+                    request_review=self.show_period_review,
+                )
             except (OSError, ValueError) as exc:
                 log.error(f"Could not read historical CSV: {exc}")
             else:
                 log.info(f"Validated {len(df)} historical CSV rows (import not implemented): {selected_path}")
+
+    def show_period_review(self, review_data: dict, submit_settings):
+        AddPeriodPopup(
+            on_submit=submit_settings,
+            start_date=review_data["start_date"],
+            course_name=review_data["course_name"],
+            period_name=review_data["period_name"],
+        ).open()
 
     # def open_add_period(self):
     #     def on_submit(data: dict): 

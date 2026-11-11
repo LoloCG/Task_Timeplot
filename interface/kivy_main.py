@@ -8,6 +8,7 @@ from data.sqlalchemy import DBManager
 from data.config_handler import ConfigManager
 
 from kivy.app import App
+from kivy.properties import StringProperty
 from kivy.uix.boxlayout import BoxLayout
 from kivy.core.window import Window
 from kivy.uix.label import Label
@@ -64,7 +65,7 @@ class MainMenuLayout(BoxLayout):
         Window.minimum_width, Window.minimum_height = 500, 400
         Window.clearcolor = (0.1, 0.1, 0.1, 1)
                 
-        self.add_widget(self.display_options())
+        self.add_widget(self.display_options(), index=1)
 
     def sync_and_refresh(self):
         Orchestrators.check_sp_sync()
@@ -206,13 +207,25 @@ KV_main_layout='''
         height: 50
         on_press: root.sync_and_refresh()
 
+    Label:
+        text: app.version
+        font_size: "12sp"
+        color: 0.65, 0.65, 0.65, 1
+        size_hint_y: None
+        height: "18sp"
+        text_size: self.size
+        halign: "right"
+        valign: "middle"
+
 '''
 
 Builder.load_string(KV_main_layout)
 
 class MainWindows(App):
-    def __init__(self):
-        super(MainWindows, self).__init__()
+    version = StringProperty()
+
+    def __init__(self, version):
+        super(MainWindows, self).__init__(version=version, title=f"TaskTimeplot v{version}")
 
     def build(self):
         return MainMenuLayout()

@@ -1,8 +1,10 @@
 from utils.logger import LoggerSingleton
 from interface.kivy_main import MainWindows
 
+APP_VERSION = "0.1.0"
+
 def main():
-    MainWindows().run()
+    MainWindows(version=APP_VERSION).run()
 
 logger_instance = LoggerSingleton()
 logger_instance.set_logger_config(level='DEBUG')

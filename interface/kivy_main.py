@@ -1,4 +1,6 @@
 import os
+from tkinter import Tk, filedialog
+
 os.environ['KIVY_LOG_MODE'] = 'PYTHON'
 
 from core.orchestrators import Orchestrators, StartSequence
@@ -73,7 +75,7 @@ class MainMenuLayout(BoxLayout):
             "Display Weekly Hours (bars)": Orchestrators.plot_weekly_hours_bars,
             "Display total Period Hours": Orchestrators.plot_total_horus_bars,
             "Display week average (Line)": Orchestrators.plot_week_avg_line_compared,
-            "test":Orchestrators.import_past_data,
+            "test": lambda *_: log.error("Feature not added"),
         }
         
         scroll = ScrollView(size_hint=(1, 1))
@@ -86,11 +88,46 @@ class MainMenuLayout(BoxLayout):
         scroll.add_widget(glayout)
         return scroll
 
-    def open_add_period(self):
-        def on_submit(data: dict): 
-            log.info(data)
-            log.info(f"Feature not yet added.")
-        AddPeriodPopup(on_submit=on_submit).open() 
+    def open_past_data_import(self, *_):
+        dialog_root = Tk()
+        dialog_root.withdraw()
+        try:
+            selected_path = filedialog.askopenfilename(
+                parent=dialog_root,
+                title="Select historical CSV file",
+                initialdir=os.path.expanduser("~"),
+                filetypes=(("CSV files", "*.csv"),),
+            )
+        finally:
+            dialog_root.destroy()
+
+        if selected_path:
+            try:
+                df = Orchestrators.import_past_data(
+                    selected_path,
+                    request_review=self.show_period_review,
+                )
+            except (OSError, ValueError) as exc:
+                log.error(f"Could not read historical CSV: {exc}")
+            else:
+                log.info(f"Loaded {len(df)} historical CSV rows for review: {selected_path}")
+
+    def show_period_review(self, review_data: dict, submit_settings):
+        AddPeriodPopup(
+            on_submit=submit_settings,
+            start_date=review_data["start_date"],
+            course_name=review_data["course_name"],
+            period_name=review_data["period_name"],
+            subjects_list=review_data["subjects"],
+            auto_exclude=review_data["auto_exclude"],
+            show_exclusions=True,
+        ).open()
+
+    # def open_add_period(self):
+    #     def on_submit(data: dict): 
+    #         log.info(data)
+    #         log.info(f"Feature not yet added.")
+    #     AddPeriodPopup(on_submit=on_submit).open() 
 
     def open_exclude_subjects(self):
         def on_submit(data: dict): 
@@ -119,16 +156,24 @@ KV_main_layout='''
         size_hint_y: None
         height: 44
         spacing: 10
+        # Button:
+        #     id: add_period_btn
+        #     text: "Add new period"
+        #     font_size: 12
+        #     size_hint: 1, 1
+        #     height: 44
+        #     on_press: root.open_add_period()
+
         Button:
-            id: add_period_btn
-            text: "Add new period"
+            id: import_csv_btn
+            text: "Import historical CSV..."
             font_size: 12
             size_hint: 1, 1
             height: 44
-            on_press: root.open_add_period()
-
-        Widget:
-        Widget:
+            text_size: self.width - 8, self.height
+            halign: "center"
+            valign: "middle"
+            on_press: root.open_past_data_import()
 
         Button:
             id: exclude_subjects_btn
@@ -159,18 +204,6 @@ KV_main_layout='''
         height: 50
         on_press: root.sync_and_refresh()
 
-    # Not yet added:
-    # # Scroll area with options (we fill options_gl in Python)
-    # ScrollView:
-    #     id: options_scroll
-    #     size_hint: 1, 1
-    #     GridLayout:
-    #         id: options_gl
-    #         cols: 1
-    #         spacing: 10
-    #         padding: 0, 10
-    #         size_hint_y: None
-    #         height: self.minimum_height
 '''
 
 Builder.load_string(KV_main_layout)

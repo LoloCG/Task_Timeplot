@@ -1,10 +1,13 @@
 from datetime import datetime, timezone
+from collections.abc import Callable
 from warnings import deprecated
 from numpy import full
 from pandas import DataFrame
 from sqlalchemy import true
+from sqlalchemy.exc import SQLAlchemyError
 from data.sqlalchemy import DBManager
 from data.file_handler import SPImportManager, Path, DFTransformers, pd
+from data.importers.csv_importer import CSVImporter
 from data.config_handler import ConfigManager
 from core.charts import Charts
 
@@ -244,23 +247,22 @@ class Orchestrators:
         )
         return None
     
+    # TODO (ponytail): Save all three tables in one transaction to prevent partial period imports.
     @staticmethod
-    def insert_df_to_db(df, ccourse, cperiod, cstart):
+    def insert_df_to_db(df, ccourse, cperiod, pstart, finished: bool = False, auto_exclude=None):
+        start_date = datetime.strptime(pstart, '%d-%m-%Y')
+        period_start = {cperiod: pstart}
+        daily_df = DFTransformers.basic_to_daily_clean_new(df, period_start)
+
         db = DBManager()
         db.insert_to_main_data(df=df)
-
-        period_start = {cperiod:cstart}
-        daily_df = DFTransformers.basic_to_daily_clean_new(df, period_start)
         db.insert_daily_data(daily_df)
-
-        # weekly_df = DFTransformers.daily_to_weekly_clean(daily_df)
-        # db.insert_weekly_data(weekly_df)
-
         db.insert_period_data(
-            course=ccourse, 
-            period=cperiod, 
-            start_date=datetime.strptime(cstart, '%d-%m-%Y'), 
-            finished = False
+            course=ccourse,
+            period=cperiod,
+            start_date=start_date,
+            finished=finished,
+            auto_exclude=auto_exclude,
         )
 
     @staticmethod
@@ -366,9 +368,80 @@ class Orchestrators:
         }
 
     @staticmethod
-    def import_past_data(*_):
-        log.error("Feature not added")
-        return
+    def import_past_data(csv_path: str | Path, request_review: Callable | None = None) -> DataFrame:
+        """Read the CSV and optionally request one course/period review at a time.
+
+        request_review(review_data, submit_settings) presents a review. Calling
+        submit_settings(settings) rejects existing destination periods, saves
+        the reviewed period, and advances only after a successful import.
+        Without confirmation the workflow stops.
+        The dataframe is returned without waiting for user reviews to finish.
+        """
+        df = CSVImporter.load_main_data_csv(csv_path)
+        if request_review is None:
+            return df
+
+        groups = iter(df.groupby(["course", "period"], sort=False))
+
+        def review_next():
+            item = next(groups, None)
+            if item is None:
+                return
+
+            (course, period), period_df = item
+            review_data = {
+                "course_name": course,
+                "period_name": period,
+                "start_date": period_df["start_time"].min().strftime("%d-%m-%Y"),
+                "subjects": sorted(period_df["subject"].unique().tolist()),
+                "row_count": len(period_df),
+                "finished": True,
+                "auto_exclude": [],
+            }
+            submitted = False
+
+            def submit_settings(settings: dict):
+                nonlocal submitted
+                if submitted:
+                    raise ValueError("This period has already been reviewed.")
+                if not isinstance(settings, dict):
+                    raise ValueError("Period settings must be a dictionary.")
+
+                selected_course = settings.get("course_name")
+                selected_period = settings.get("period_name")
+                if not isinstance(selected_course, str) or not selected_course.strip():
+                    raise ValueError("Course name is required.")
+                if not isinstance(selected_period, str) or not selected_period.strip():
+                    raise ValueError("Period name is required.")
+                selected_course = selected_course.strip()
+                selected_period = selected_period.strip()
+                try:
+                    if DBManager().period_exists(selected_course, selected_period):
+                        raise ValueError("This course/period already exists in the database.")
+                    reviewed_df = period_df.assign(course=selected_course, period=selected_period)
+                    Orchestrators.insert_df_to_db(
+                        df=reviewed_df,
+                        ccourse=selected_course,
+                        cperiod=selected_period,
+                        pstart=settings["start_date"],
+                        finished=True,
+                        auto_exclude=settings.get("auto_exclude", []),
+                    )
+                except SQLAlchemyError as exc:
+                    log.exception("Could not import historical period %s / %s; some data may already be saved.",
+                                  selected_course, selected_period)
+                    raise ValueError("Import failed; some data may already be saved.") from exc
+
+                log.info("Imported historical period %s / %s (%s rows).",
+                         selected_course, selected_period, len(reviewed_df))
+                submitted = True
+                review_next()
+
+            request_review(review_data, submit_settings)
+
+        review_next()
+        return df
+
 
 def pivot_time_by_subject_period(
     df: pd.DataFrame,

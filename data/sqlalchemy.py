@@ -1,5 +1,6 @@
 # from requests import session
 from pathlib import Path
+import sys
 import pandas as pd
 from dataclasses import dataclass
 
@@ -29,10 +30,16 @@ class DBManager():
     def __init__(
             self, 
             db_name="studyanalytics.db", 
-            db_path:str|Path=Path(__file__).resolve().parent.parent
+            db_path:str|Path|None=None
         ):
+        if db_path is None:
+            db_path = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).parents[1]
+            
+        db_path = Path(db_path).resolve()
+        db_path.mkdir(parents=True, exist_ok=True)
+
         self.db_file = db_path / db_name
-        self.engine = create_engine(f"sqlite:///{db_path}/{db_name}", echo=False)
+        self.engine = create_engine(f"sqlite:///{self.db_file}", echo=False)
         self.session = sessionmaker(bind=self.engine)
 
     def inspect_status(self)->DBStatus:
@@ -208,6 +215,13 @@ class DBManager():
         finally:
             session.close()
     '''
+    # FIXME: this could be a bad implementation, as depends on the string values entered...
+    # Check should be also made by the overlapping times based on start and end dates
+    def period_exists(self, course: str, period: str) -> bool:
+        with self.session() as session:
+            return session.query(PeriodDataTable.id).filter_by(
+                course=course, period=period
+            ).first() is not None
 
     def get_period_data(self, 
         course:str, 

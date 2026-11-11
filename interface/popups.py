@@ -22,49 +22,53 @@ AddPeriodPopupKv = '''
         padding: 16
         spacing: 12
 
-        GridLayout:
-            cols: 2
-            row_default_height: "36dp"
-            row_force_default: True
-            size_hint_y: None
-            height: self.minimum_height
-            spacing: 8
+        ScrollView:
+            do_scroll_x: False
 
-            Label:
-                text: "Start date"
-                halign: "left"
-                valign: "middle"
-                text_size: self.size
-            TextInput:
-                text: root.start_date
-                hint_text: "e.g., 20-06-2025"
-                multiline: False
-                write_tab: False
-                on_text: root.start_date = self.text
+            GridLayout:
+                id: period_fields
+                cols: 2
+                row_default_height: "36dp"
+                row_force_default: True
+                size_hint_y: None
+                height: self.minimum_height
+                spacing: 8
 
-            Label:
-                text: "Course name"
-                halign: "left"
-                valign: "middle"
-                text_size: self.size
-            TextInput:
-                text: root.course_name
-                hint_text: "e.g., Pharmacy 25-26"
-                multiline: False
-                write_tab: False
-                on_text: root.course_name = self.text
+                Label:
+                    text: "Start date"
+                    halign: "left"
+                    valign: "middle"
+                    text_size: self.size
+                TextInput:
+                    text: root.start_date
+                    hint_text: "e.g., 20-06-2025"
+                    multiline: False
+                    write_tab: False
+                    on_text: root.start_date = self.text
 
-            Label:
-                text: "Period name"
-                halign: "left" 
-                valign: "middle"
-                text_size: self.size
-            TextInput:
-                text: root.period_name
-                hint_text: "e.g., 1st Semester"
-                multiline: False
-                write_tab: False
-                on_text: root.period_name = self.text
+                Label:
+                    text: "Course name"
+                    halign: "left"
+                    valign: "middle"
+                    text_size: self.size
+                TextInput:
+                    text: root.course_name
+                    hint_text: "e.g., Pharmacy 25-26"
+                    multiline: False
+                    write_tab: False
+                    on_text: root.course_name = self.text
+
+                Label:
+                    text: "Period name"
+                    halign: "left"
+                    valign: "middle"
+                    text_size: self.size
+                TextInput:
+                    text: root.period_name
+                    hint_text: "e.g., 1st Semester"
+                    multiline: False
+                    write_tab: False
+                    on_text: root.period_name = self.text
 
         Label:
             text: root.error_text
@@ -77,17 +81,24 @@ AddPeriodPopupKv = '''
             height: "48dp"
             spacing: 8
 
-            Widget:
+            Button:
+                text: "Exclude subjects"
+                font_size: "12sp"
+                opacity: 1 if root.show_exclusions else 0
+                disabled: not root.show_exclusions
+                on_release: root.open_exclude_subjects()
             Button:
                 text: "Exit application" if root.fresh_start else "Cancel"
                 on_release: root.handle_cancel()
             Button:
+                id: submit_btn
                 text: "OK"
                 on_release: root.handle_ok()
 '''
 
 class AddPeriodPopup(Popup):
     fresh_start = BooleanProperty(False)
+    show_exclusions = BooleanProperty(False)
     start_date  = StringProperty("")
     course_name = StringProperty("")
     period_name = StringProperty("")
@@ -101,6 +112,7 @@ class AddPeriodPopup(Popup):
             self, fresh_start=False, 
             on_submit=None, start_date="", 
             course_name="", period_name="", 
+            subjects_list=None, auto_exclude=None, show_exclusions=False,
             **kwargs):
         super().__init__(**kwargs)
         self.fresh_start = fresh_start
@@ -108,6 +120,22 @@ class AddPeriodPopup(Popup):
         self.start_date = start_date
         self.course_name = course_name
         self.period_name = period_name
+        self.subjects_list = list(subjects_list or [])
+        self.auto_exclude = list(auto_exclude or [])
+        self.show_exclusions = show_exclusions
+
+    def open_exclude_subjects(self):
+        def on_submit(selected):
+            self.auto_exclude = list(selected or [])
+
+        ExcludeSubjectsPopup(
+            cnfg_mng=None,
+            subjects_list=self.subjects_list,
+            course_name=self.course_name,
+            period_name=self.period_name,
+            selected_subjects=self.auto_exclude,
+            on_submit=on_submit,
+        ).open()
 
     def validate(self):
         if not self.start_date.strip():
@@ -129,9 +157,22 @@ class AddPeriodPopup(Popup):
             "course_name": self.course_name.strip(),
             "period_name": self.period_name.strip(),
         }
+        if self.show_exclusions:
+            payload["auto_exclude"] = list(self.auto_exclude)
 
         if callable(self.on_submit):
-            self.on_submit(payload)
+            try:
+                self.on_submit(payload)
+            except ValueError as exc:
+                self.error_text = str(exc)
+                return
+
+        self.dismiss()
+
+    def handle_cancel(self):
+        if self.fresh_start:
+            App.get_running_app().stop()
+            return
 
         self.dismiss()
 
@@ -303,12 +344,14 @@ class ExcludeSubjectsPopup(Popup):
             db_mng=None,
             on_submit=None,
             course_name=None, period_name=None,
+            selected_subjects=None,
             **kwargs,
             ):
         
         super().__init__(**kwargs)
         self.on_submit = on_submit
         self.cnfg_mng  = cnfg_mng
+        self.selected_subjects = list(selected_subjects or [])
 
         self.default_exclude = None
         if course_name is None and period_name is None:
@@ -345,7 +388,7 @@ class ExcludeSubjectsPopup(Popup):
                 size_hint_y=None,
                 height="40dp",
                 # No 'group' -> multi-select allowed
-                state="normal"  # start unselected
+                state="down" if subj in self.selected_subjects else "normal"
             )
             grid.add_widget(btn)
 
@@ -365,7 +408,8 @@ class ExcludeSubjectsPopup(Popup):
         selected = self._collect_selected_subjects()
         payload = selected if selected else None
         
-        if payload: self.cnfg_mng().change_exclude_list(payload)
+        if payload and self.cnfg_mng is not None:
+            self.cnfg_mng().change_exclude_list(payload)
         
         if callable(self.on_submit):
             # Behaviour is going to be contained in this popup, but im still leaving the payload here for debug purposes.

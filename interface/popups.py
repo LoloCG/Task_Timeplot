@@ -39,6 +39,7 @@ AddPeriodPopupKv = '''
                     halign: "left"
                     valign: "middle"
                     text_size: self.size
+                # TODO: Use a tkcalendar selector preselected to root.start_date, allowing earlier dates.
                 TextInput:
                     text: root.start_date
                     hint_text: "e.g., 20-06-2025"

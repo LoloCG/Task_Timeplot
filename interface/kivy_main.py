@@ -58,6 +58,8 @@ class StatsPanel(GridLayout):
 class MainMenuLayout(BoxLayout):
     def __init__(self, **kwargs):
         super(MainMenuLayout, self).__init__(**kwargs)
+        # TODO: Fix buttons requiring clicks to their left until the window is resized.
+        # Suspected cause: width 400 is below minimum_width 500; request (500, 550).
         Window.size = (400, 550)
         Window.minimum_width, Window.minimum_height = 500, 400
         Window.clearcolor = (0.1, 0.1, 0.1, 1)

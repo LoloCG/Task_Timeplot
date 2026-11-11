@@ -3,6 +3,14 @@ from tkinter import Tk, filedialog
 
 os.environ['KIVY_LOG_MODE'] = 'PYTHON'
 
+from kivy.config import Config
+
+# Configure valid dimensions before any import can create the Kivy window.
+Config.set('graphics', 'width', '500')
+Config.set('graphics', 'height', '550')
+Config.set('graphics', 'minimum_width', '500')
+Config.set('graphics', 'minimum_height', '400')
+
 from core.orchestrators import Orchestrators, StartSequence
 from data.sqlalchemy import DBManager
 from data.config_handler import ConfigManager
@@ -59,10 +67,6 @@ class StatsPanel(GridLayout):
 class MainMenuLayout(BoxLayout):
     def __init__(self, **kwargs):
         super(MainMenuLayout, self).__init__(**kwargs)
-        # TODO: Fix buttons requiring clicks to their left until the window is resized.
-        # Suspected cause: width 400 is below minimum_width 500; request (500, 550).
-        Window.size = (400, 550)
-        Window.minimum_width, Window.minimum_height = 500, 400
         Window.clearcolor = (0.1, 0.1, 0.1, 1)
                 
         self.add_widget(self.display_options(), index=1)

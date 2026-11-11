@@ -176,6 +176,13 @@ class AddPeriodPopup(Popup):
 
         self.dismiss()
 
+    def handle_cancel(self):
+        if self.fresh_start:
+            App.get_running_app().stop()
+            return
+
+        self.dismiss()
+
 Builder.load_string(AddPeriodPopupKv)
 
 # --------------------------------------------------------

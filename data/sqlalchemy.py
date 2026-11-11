@@ -215,6 +215,13 @@ class DBManager():
         finally:
             session.close()
     '''
+    # FIXME: this could be a bad implementation, as depends on the string values entered...
+    # Check should be also made by the overlapping times based on start and end dates
+    def period_exists(self, course: str, period: str) -> bool:
+        with self.session() as session:
+            return session.query(PeriodDataTable.id).filter_by(
+                course=course, period=period
+            ).first() is not None
 
     def get_period_data(self, 
         course:str, 

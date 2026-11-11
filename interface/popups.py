@@ -161,7 +161,11 @@ class AddPeriodPopup(Popup):
             payload["auto_exclude"] = list(self.auto_exclude)
 
         if callable(self.on_submit):
-            self.on_submit(payload)
+            try:
+                self.on_submit(payload)
+            except ValueError as exc:
+                self.error_text = str(exc)
+                return
 
         self.dismiss()
 

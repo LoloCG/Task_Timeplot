@@ -369,8 +369,9 @@ class Orchestrators:
         """Read the CSV and optionally request one course/period review at a time.
 
         request_review(review_data, submit_settings) presents a review. Calling
-        submit_settings(settings) logs those settings and advances to the next
-        group. Without confirmation the workflow stops. No data is imported yet.
+        submit_settings(settings) rejects existing destination periods, then logs
+        settings and advances. Without confirmation the workflow stops.
+        No data is imported yet.
         The dataframe is returned without waiting for user reviews to finish.
         """
         df = CSVImporter.load_main_data_csv(csv_path)
@@ -402,6 +403,15 @@ class Orchestrators:
                     raise ValueError("This period has already been reviewed.")
                 if not isinstance(settings, dict):
                     raise ValueError("Period settings must be a dictionary.")
+
+                selected_course = settings.get("course_name")
+                selected_period = settings.get("period_name")
+                if not isinstance(selected_course, str) or not selected_course.strip():
+                    raise ValueError("Course name is required.")
+                if not isinstance(selected_period, str) or not selected_period.strip():
+                    raise ValueError("Period name is required.")
+                if DBManager().period_exists(selected_course.strip(), selected_period.strip()):
+                    raise ValueError("This course/period already exists in the database.")
                 
                 # TODO:
                 log.info("Reviewed historical period %s / %s (import not implemented): %s",

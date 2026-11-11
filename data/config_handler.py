@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import json
+import sys
 
 from utils.logger import LoggerSingleton
 log = LoggerSingleton().get_logger()
@@ -14,8 +15,11 @@ class ConfigStatus:
     data: dict | None
 
 class ConfigManager:
-    def __init__(self, path: Path = Path("config.json")):
-        self.path = path
+    def __init__(self, path: str | Path | None = None):
+        if path is None:
+            app_dir = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).parents[1]
+            path = app_dir / "config.json"
+        self.path = Path(path).resolve()
 
     def inspect(self)->ConfigStatus:
         log.debug(f"inspecting config file.")

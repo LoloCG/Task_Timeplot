@@ -1,4 +1,6 @@
 import os
+from tkinter import Tk, filedialog
+
 os.environ['KIVY_LOG_MODE'] = 'PYTHON'
 
 from core.orchestrators import Orchestrators, StartSequence
@@ -6,6 +8,7 @@ from data.sqlalchemy import DBManager
 from data.config_handler import ConfigManager
 
 from kivy.app import App
+from kivy.properties import StringProperty
 from kivy.uix.boxlayout import BoxLayout
 from kivy.core.window import Window
 from kivy.uix.label import Label
@@ -15,7 +18,11 @@ from kivy.uix.scrollview import ScrollView
 from kivy.lang import Builder
 from kivy.uix.screenmanager import ScreenManager, Screen
 
-from interface.popups import AddPeriodPopup, ExcludeSubjectsPopup
+from interface.popups import (
+    AddPeriodPopup,
+    ExcludeSubjectsPopup,
+    SyncFilePopup,
+)
 
 from utils.logger import LoggerSingleton
 log = LoggerSingleton().get_logger()
@@ -52,11 +59,13 @@ class StatsPanel(GridLayout):
 class MainMenuLayout(BoxLayout):
     def __init__(self, **kwargs):
         super(MainMenuLayout, self).__init__(**kwargs)
+        # TODO: Fix buttons requiring clicks to their left until the window is resized.
+        # Suspected cause: width 400 is below minimum_width 500; request (500, 550).
         Window.size = (400, 550)
         Window.minimum_width, Window.minimum_height = 500, 400
         Window.clearcolor = (0.1, 0.1, 0.1, 1)
                 
-        self.add_widget(self.display_options())
+        self.add_widget(self.display_options(), index=1)
 
     def sync_and_refresh(self):
         Orchestrators.check_sp_sync()
@@ -69,7 +78,7 @@ class MainMenuLayout(BoxLayout):
             "Display Weekly Hours (bars)": Orchestrators.plot_weekly_hours_bars,
             "Display total Period Hours": Orchestrators.plot_total_horus_bars,
             "Display week average (Line)": Orchestrators.plot_week_avg_line_compared,
-            "test":Orchestrators.import_past_data,
+            "test": lambda *_: log.error("Feature not added"),
         }
         
         scroll = ScrollView(size_hint=(1, 1))
@@ -82,11 +91,46 @@ class MainMenuLayout(BoxLayout):
         scroll.add_widget(glayout)
         return scroll
 
-    def open_add_period(self):
-        def on_submit(data: dict): 
-            log.info(data)
-            log.info(f"Feature not yet added.")
-        AddPeriodPopup(on_submit=on_submit).open() 
+    def open_past_data_import(self, *_):
+        dialog_root = Tk()
+        dialog_root.withdraw()
+        try:
+            selected_path = filedialog.askopenfilename(
+                parent=dialog_root,
+                title="Select historical CSV file",
+                initialdir=os.path.expanduser("~"),
+                filetypes=(("CSV files", "*.csv"),),
+            )
+        finally:
+            dialog_root.destroy()
+
+        if selected_path:
+            try:
+                df = Orchestrators.import_past_data(
+                    selected_path,
+                    request_review=self.show_period_review,
+                )
+            except (OSError, ValueError) as exc:
+                log.error(f"Could not read historical CSV: {exc}")
+            else:
+                log.info(f"Loaded {len(df)} historical CSV rows for review: {selected_path}")
+
+    def show_period_review(self, review_data: dict, submit_settings):
+        AddPeriodPopup(
+            on_submit=submit_settings,
+            start_date=review_data["start_date"],
+            course_name=review_data["course_name"],
+            period_name=review_data["period_name"],
+            subjects_list=review_data["subjects"],
+            auto_exclude=review_data["auto_exclude"],
+            show_exclusions=True,
+        ).open()
+
+    # def open_add_period(self):
+    #     def on_submit(data: dict): 
+    #         log.info(data)
+    #         log.info(f"Feature not yet added.")
+    #     AddPeriodPopup(on_submit=on_submit).open() 
 
     def open_exclude_subjects(self):
         def on_submit(data: dict): 
@@ -115,16 +159,24 @@ KV_main_layout='''
         size_hint_y: None
         height: 44
         spacing: 10
+        # Button:
+        #     id: add_period_btn
+        #     text: "Add new period"
+        #     font_size: 12
+        #     size_hint: 1, 1
+        #     height: 44
+        #     on_press: root.open_add_period()
+
         Button:
-            id: add_period_btn
-            text: "Add new period"
+            id: import_csv_btn
+            text: "Import historical CSV..."
             font_size: 12
             size_hint: 1, 1
             height: 44
-            on_press: root.open_add_period()
-
-        Widget:
-        Widget:
+            text_size: self.width - 8, self.height
+            halign: "center"
+            valign: "middle"
+            on_press: root.open_past_data_import()
 
         Button:
             id: exclude_subjects_btn
@@ -155,25 +207,25 @@ KV_main_layout='''
         height: 50
         on_press: root.sync_and_refresh()
 
-    # Not yet added:
-    # # Scroll area with options (we fill options_gl in Python)
-    # ScrollView:
-    #     id: options_scroll
-    #     size_hint: 1, 1
-    #     GridLayout:
-    #         id: options_gl
-    #         cols: 1
-    #         spacing: 10
-    #         padding: 0, 10
-    #         size_hint_y: None
-    #         height: self.minimum_height
+    Label:
+        text: app.version
+        font_size: "12sp"
+        color: 0.65, 0.65, 0.65, 1
+        size_hint_y: None
+        height: "18sp"
+        text_size: self.size
+        halign: "right"
+        valign: "middle"
+
 '''
 
 Builder.load_string(KV_main_layout)
 
 class MainWindows(App):
-    def __init__(self):
-        super(MainWindows, self).__init__()
+    version = StringProperty()
+
+    def __init__(self, version):
+        super(MainWindows, self).__init__(version=version, title=f"TaskTimeplot v{version}")
 
     def build(self):
         return MainMenuLayout()
@@ -182,36 +234,59 @@ class MainWindows(App):
         start_dict = StartSequence.start_sequence()
         log.debug(f"on_start payload = {start_dict}")
         
-        if start_dict["ask_current_period"]:
-            log.debug(f"Asking for current period data")
-            def on_submit(data: dict):
-                StartSequence.generate_from_start(
-                    ccourse=data["course_name"],
-                    cperiod=data["period_name"],
-                    period_start=data["start_date"],
-                )
-                # # refresh after bootstrap
-                # if self.root and "stats_panel" in self.root.ids:
-                #     self.root.ids.stats_panel.refresh()
-                #     return MainMenuLayout
+        if start_dict["ask_current_period"] or start_dict["ask_sync_path"]:
+            self.run_fresh_start_sequence(start_dict)
+            return
 
-            AddPeriodPopup(on_submit=on_submit).open()
+        self.finish_startup()
+
+    def run_fresh_start_sequence(self, start_payload):
+        if start_payload["ask_sync_path"]:
+            SyncFilePopup(on_submit=self.handle_sync_path).open()
+            return
+
+        if start_payload["ask_current_period"]:
+            AddPeriodPopup(
+                fresh_start=True,
+                on_submit=self.handle_new_period,
+            ).open()
+            return
         
-        else:
-            if not start_dict.get("ask_sync_path", False):
-                try:
-                    log.debug("Running startup sync check before first stats refresh")
-                    Orchestrators.check_sp_sync()
-                except Exception as exc:
-                    log.warning(
-                        f"Startup sync failed, continuing with existing DB data: {exc}",
-                        exc_info=True,
-                    )
-            else:
-                log.warning("Skipping startup sync check: sync path is not configured")
+        self.finish_startup()
 
+    def finish_startup(self):
+        try:
+            log.debug("Running startup sync check before first stats refresh")
+            Orchestrators.check_sp_sync()
+        except Exception as exc:
+            log.warning(
+                f"Startup sync failed, continuing with existing DB data: {exc}",
+                exc_info=True,
+            )
+
+        if self.root and "stats_panel" in self.root.ids:
             self.root.ids.stats_panel.refresh()
-            log.debug(f"returning to MainMenuLayout")
-            return MainMenuLayout
-            
 
+        log.debug(f"returning to MainMenuLayout")
+  
+    def handle_sync_path(self, sync_path:str):
+        ConfigManager().json_upsert({
+            "sync_data": {
+                "sync_file_path": sync_path,
+            }
+        })
+
+        updated_payload = StartSequence.start_sequence()
+        self.run_fresh_start_sequence(updated_payload)
+
+    def handle_new_period(self, data:dict):
+        log.debug(f"Generating data for the submitted current period")
+
+        StartSequence.generate_from_start(
+            ccourse=data["course_name"],
+            cperiod=data["period_name"],
+            period_start=data["start_date"],
+        )
+
+        if self.root and "stats_panel" in self.root.ids:
+            self.root.ids.stats_panel.refresh()

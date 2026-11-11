@@ -1,7 +1,7 @@
 from utils.logger import LoggerSingleton
 from interface.kivy_main import MainWindows
 
-APP_VERSION = "0.1.0"
+APP_VERSION = "v0.3"
 
 def main():
     MainWindows(version=APP_VERSION).run()

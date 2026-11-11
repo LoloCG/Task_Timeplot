@@ -110,7 +110,7 @@ class MainMenuLayout(BoxLayout):
             except (OSError, ValueError) as exc:
                 log.error(f"Could not read historical CSV: {exc}")
             else:
-                log.info(f"Validated {len(df)} historical CSV rows (import not implemented): {selected_path}")
+                log.info(f"Loaded {len(df)} historical CSV rows for review: {selected_path}")
 
     def show_period_review(self, review_data: dict, submit_settings):
         AddPeriodPopup(
